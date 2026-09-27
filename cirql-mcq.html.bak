@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CIRQL — Vibe Check</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --midnight: #060606;
+      --bone: #F3F2ED;
+      --bone-dim: #C8C6BE;
+      --vibe: #7B2FFF;
+      --vibe-light: rgba(123,47,255,0.12);
+      --vibe-glow: rgba(123,47,255,0.25);
+      --white: #ffffff;
+      --card-bg: #0F0F0F;
+      --card-hover: #141414;
+      --border: rgba(255,255,255,0.08);
+      --border-selected: rgba(123,47,255,0.6);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--midnight);
+      color: var(--bone);
+      font-family: 'DM Sans', sans-serif;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    /* Grain overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+      opacity: 0.028;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* Ambient glow */
+    .page-glow {
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 800px;
+      background: radial-gradient(circle, rgba(123,47,255,0.1) 0%, transparent 65%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Nav */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      padding: 0 40px;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: rgba(6,6,6,0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    .nav-logo {
+      font-family: 'Fraunces', serif;
+      font-weight: 700;
+      font-size: 22px;
+      letter-spacing: -0.03em;
+      color: var(--bone);
+      text-decoration: none;
+    }
+
+    .nav-step {
+      font-size: 12px;
+      font-weight: 500;
+      color: rgba(243,242,237,0.35);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    /* Main layout */
+    main {
+      position: relative;
+      z-index: 1;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 120px 24px 100px;
+    }
+
+    /* Progress bar */
+    .progress-wrap {
+      margin-bottom: 56px;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .progress-label span {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(243,242,237,0.35);
+    }
+
+    .progress-label .progress-pct {
+      color: var(--vibe);
+    }
+
+    .progress-bar-track {
+      height: 2px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--vibe);
+      border-radius: 100px;
+      transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    /* Question block */
+    .question-block {
+      margin-bottom: 56px;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .question-block:nth-child(2) { animation-delay: 0.05s; }
+    .question-block:nth-child(3) { animation-delay: 0.10s; }
+    .question-block:nth-child(4) { animation-delay: 0.15s; }
+    .question-block:nth-child(5) { animation-delay: 0.20s; }
+    .question-block:nth-child(6) { animation-delay: 0.25s; }
+    .question-block:nth-child(7) { animation-delay: 0.30s; }
+    .question-block:nth-child(8) { animation-delay: 0.35s; }
+    .question-block:nth-child(9) { animation-delay: 0.40s; }
+    .question-block:nth-child(10) { animation-delay: 0.45s; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .question-title {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(22px, 4vw, 30px);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      color: var(--bone);
+      margin-bottom: 20px;
+      line-height: 1.2;
+    }
+
+    /* Option cards */
+    .options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .option-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, transform 0.15s;
+      user-select: none;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .option-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--vibe-light);
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+    }
+
+    .option-card:hover {
+      border-color: rgba(255,255,255,0.15);
+      background: var(--card-hover);
+      transform: translateY(-1px);
+    }
+
+    .option-card.selected {
+      border-color: var(--border-selected);
+      background: var(--card-hover);
+      box-shadow: 0 0 0 1px var(--border-selected), 0 4px 24px rgba(123,47,255,0.12);
+    }
+
+    .option-card.selected::before {
+      opacity: 1;
+    }
+
+    /* Radio dot */
+    .option-dot {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.2);
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s;
+    }
+
+    .option-card.selected .option-dot {
+      border-color: var(--vibe);
+      background: var(--vibe);
+    }
+
+    .option-dot-inner {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #fff;
+      opacity: 0;
+      transform: scale(0);
+      transition: opacity 0.2s, transform 0.2s;
+    }
+
+    .option-card.selected .option-dot-inner {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* Option text */
+    .option-text {
+      flex: 1;
+    }
+
+    .option-label {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--bone);
+      margin-bottom: 3px;
+      line-height: 1.3;
+    }
+
+    .option-desc {
+      font-size: 13px;
+      font-weight: 400;
+      color: rgba(200,198,190,0.65);
+      line-height: 1.5;
+    }
+
+    /* Divider */
+    .section-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 16px 0 56px;
+    }
+
+    /* Submit */
+    .submit-wrap {
+      display: flex;
+      justify-content: center;
+      padding-top: 8px;
+      animation: fadeUp 0.5s 0.5s ease both;
+    }
+
+    .btn-submit {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      background: var(--vibe);
+      border: none;
+      cursor: pointer;
+      padding: 18px 56px;
+      border-radius: 100px;
+      letter-spacing: 0.01em;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-submit:hover {
+      opacity: 0.9;
+      transform: scale(1.02);
+      box-shadow: 0 0 48px rgba(123,47,255,0.4);
+    }
+
+    .btn-submit:active {
+      transform: scale(0.98);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* Result overlay */
+    .result-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--midnight);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      text-align: center;
+      padding: 40px;
+      animation: fadeIn 0.4s ease;
+    }
+
+    .result-overlay.show {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    .result-glow {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(123,47,255,0.22) 0%, transparent 65%);
+      pointer-events: none;
+    }
+
+    .result-eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--vibe);
+      margin-bottom: 24px;
+    }
+
+    .result-title {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(40px, 8vw, 72px);
+      font-weight: 400;
+      letter-spacing: -0.03em;
+      color: var(--bone);
+      line-height: 1;
+      margin-bottom: 20px;
+    }
+
+    .result-sub {
+      font-size: 16px;
+      color: var(--bone-dim);
+      max-width: 480px;
+      line-height: 1.6;
+      margin-bottom: 40px;
+    }
+
+    .btn-restart {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: rgba(243,242,237,0.5);
+      background: none;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      padding: 12px 28px;
+      border-radius: 100px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    .btn-restart:hover {
+      color: var(--bone);
+      border-color: rgba(255,255,255,0.2);
+    }
+  </style>
+</head>
+<body>
+
+<div class="page-glow"></div>
+
+<nav>
+  <a class="nav-logo" href="#">CIRQL</a>
+  <span class="nav-step">Vibe Check</span>
+</nav>
+
+<main>
+
+  <!-- Progress -->
+  <div class="progress-wrap">
+    <div class="progress-label">
+      <span>Your vibe profile</span>
+      <span class="progress-pct" id="pct">0%</span>
+    </div>
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progressBar" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- Q1 -->
+  <div class="question-block">
+    <h2 class="question-title">What's your ideal first date vibe?</h2>
+    <div class="options" data-q="1">
+      <div class="option-card" data-val="a">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Low-key hangout</div>
+          <div class="option-desc">Coffee, a walk, zero pressure — just vibing.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="b">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Dinner and deep talk</div>
+          <div class="option-desc">Good food, good conversation, real connection.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="c">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Activity date</div>
+          <div class="option-desc">Mini golf, bowling, cooking class — something to do.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="d">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Spontaneous adventure</div>
+          <div class="option-desc">No plan, just "let's see where the night goes."</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Q2 -->
+  <div class="question-block">
+    <h2 class="question-title">How do you recharge after a social event?</h2>
+    <div class="options" data-q="2">
+      <div class="option-card" data-val="a">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Alone time, no exceptions</div>
+          <div class="option-desc">I need silence and solitude to reset completely.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="b">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">One-on-one wind down</div>
+          <div class="option-desc">With one close person — that still feels like rest.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="c">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Jump to the afterparty</div>
+          <div class="option-desc">Social events energise me — bring on more.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Q3 -->
+  <div class="question-block">
+    <h2 class="question-title">What matters most in a connection?</h2>
+    <div class="options" data-q="3">
+      <div class="option-card" data-val="a">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Intellectual spark</div>
+          <div class="option-desc">We can talk for hours and never run out of things to say.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="b">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Emotional depth</div>
+          <div class="option-desc">They really get me — and I get them.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="c">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Shared adventures</div>
+          <div class="option-desc">We do things together and build real memories.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="d">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Natural chemistry</div>
+          <div class="option-desc">That undeniable pull — it's just there or it isn't.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Q4 -->
+  <div class="question-block">
+    <h2 class="question-title">Your texting style is closest to…</h2>
+    <div class="options" data-q="4">
+      <div class="option-card" data-val="a">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Quick and frequent</div>
+          <div class="option-desc">Short messages all day — I like staying in the loop.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="b">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Thoughtful and slow</div>
+          <div class="option-desc">I take my time but write something worth reading.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="c">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Memes and voice notes</div>
+          <div class="option-desc">Why type when you can vibe differently?</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="d">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Just call me</div>
+          <div class="option-desc">Texting is exhausting — let's actually talk.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Q5 -->
+  <div class="question-block">
+    <h2 class="question-title">How do you feel about vulnerability early on?</h2>
+    <div class="options" data-q="5">
+      <div class="option-card" data-val="a">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Open book from day one</div>
+          <div class="option-desc">I'd rather skip the small talk and go real.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="b">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Gradually, as trust builds</div>
+          <div class="option-desc">I open up when I feel safe — it just takes time.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="c">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Keep it light for a while</div>
+          <div class="option-desc">I prefer fun and easy before getting deep.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Q6 -->
+  <div class="question-block">
+    <h2 class="question-title">What does your ideal weekend look like?</h2>
+    <div class="options" data-q="6">
+      <div class="option-card" data-val="a">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Social butterfly mode</div>
+          <div class="option-desc">Brunch, events, seeing everyone I know.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="b">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Cosy and intentional</div>
+          <div class="option-desc">One or two plans, quality over quantity.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="c">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Fully offline</div>
+          <div class="option-desc">Books, films, food, zero obligations.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="d">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Spontaneous, no plan</div>
+          <div class="option-desc">I'll figure it out Friday night — that's the fun.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Q7 -->
+  <div class="question-block">
+    <h2 class="question-title">In a relationship, your love language is…</h2>
+    <div class="options" data-q="7">
+      <div class="option-card" data-val="a">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Words of affirmation</div>
+          <div class="option-desc">Tell me how you feel — often and genuinely.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="b">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Quality time</div>
+          <div class="option-desc">Just be present with me, fully.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="c">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Acts of service</div>
+          <div class="option-desc">Actions speak louder than words for me.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="d">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Physical touch</div>
+          <div class="option-desc">A hug, a hand — closeness is everything.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Q8 -->
+  <div class="question-block">
+    <h2 class="question-title">How do you handle disagreements?</h2>
+    <div class="options" data-q="8">
+      <div class="option-card" data-val="a">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Address it right away</div>
+          <div class="option-desc">I'd rather talk it out than let it fester.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="b">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Cool off first, then talk</div>
+          <div class="option-desc">I need space to process before I can communicate well.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="c">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Avoid conflict if possible</div>
+          <div class="option-desc">I lean toward harmony — confrontation isn't my thing.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Q9 -->
+  <div class="question-block">
+    <h2 class="question-title">What's your stance on dating multiple people at once?</h2>
+    <div class="options" data-q="9">
+      <div class="option-card" data-val="a">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">One person at a time</div>
+          <div class="option-desc">I give my full attention when I'm interested in someone.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="b">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Exploring is fine early on</div>
+          <div class="option-desc">Until it's official, keeping options open feels natural.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="c">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Depends on the connection</div>
+          <div class="option-desc">If I feel something strong, I naturally stop looking.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Q10 -->
+  <div class="question-block">
+    <h2 class="question-title">What are you looking for right now?</h2>
+    <div class="options" data-q="10">
+      <div class="option-card" data-val="a">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Something serious</div>
+          <div class="option-desc">I want a real relationship — depth, commitment, the works.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="b">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Seeing where it goes</div>
+          <div class="option-desc">No pressure — just open to what feels right.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="c">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Meaningful connections</div>
+          <div class="option-desc">Not necessarily romantic — I just want real people in my life.</div>
+        </div>
+      </div>
+      <div class="option-card" data-val="d">
+        <div class="option-dot"><div class="option-dot-inner"></div></div>
+        <div class="option-text">
+          <div class="option-label">Fun and good energy</div>
+          <div class="option-desc">Life's short — I want to enjoy it with interesting people.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Submit -->
+  <div class="submit-wrap">
+    <button class="btn-submit" id="submitBtn" disabled>See my vibe profile →</button>
+  </div>
+
+</main>
+
+<!-- Result overlay -->
+<div class="result-overlay" id="resultOverlay">
+  <div class="result-glow"></div>
+  <p class="result-eyebrow">Your profile is ready</p>
+  <h1 class="result-title">The <em style="font-style:italic;">Connector</em></h1>
+  <p class="result-sub">You value depth, spontaneity, and real chemistry. You're open-hearted but intentional — the kind of person who makes others feel genuinely seen. CIRQL will match you with people who bring that same energy.</p>
+  <button class="btn-restart" onclick="restart()">Retake the quiz</button>
+</div>
+
+<script>
+  const TOTAL = 10;
+  const answers = {};
+
+  function updateProgress() {
+    const count = Object.keys(answers).length;
+    const pct = Math.round((count / TOTAL) * 100);
+    document.getElementById('progressBar').style.width = pct + '%';
+    document.getElementById('pct').textContent = pct + '%';
+    document.getElementById('submitBtn').disabled = count < TOTAL;
+  }
+
+  document.querySelectorAll('.options').forEach(group => {
+    group.querySelectorAll('.option-card').forEach(card => {
+      card.addEventListener('click', () => {
+        // Deselect siblings
+        group.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+        // Select this
+        card.classList.add('selected');
+        // Record answer
+        answers[group.dataset.q] = card.dataset.val;
+        updateProgress();
+      });
+    });
+  });
+
+  document.getElementById('submitBtn').addEventListener('click', () => {
+    document.getElementById('resultOverlay').classList.add('show');
+    window.scrollTo({ top: 0 });
+  });
+
+  function restart() {
+    document.getElementById('resultOverlay').classList.remove('show');
+    document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+    Object.keys(answers).forEach(k => delete answers[k]);
+    updateProgress();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+</script>
+
+</body>
+</html>
