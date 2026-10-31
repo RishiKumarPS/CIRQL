@@ -1827,6 +1827,59 @@
         }
       }
 
+      async function featureEvent(targetEvent) {
+        const previousFeatured = events
+          .filter((event) => event.featured)
+          .map((event) => event.id);
+        const { error: clearError } = await window.supabaseClient
+          .from("events")
+          .update({ featured: false })
+          .neq("id", targetEvent.id);
+        if (clearError) throw clearError;
+
+        events.forEach((event) => {
+          if (String(event.id) !== String(targetEvent.id)) {
+            event.featured = false;
+          }
+        });
+        renderEvents();
+
+        const { error: targetError } = await window.supabaseClient
+          .from("events")
+          .update({ featured: true })
+          .eq("id", targetEvent.id);
+        if (targetError) {
+          const rollbackErrors = [];
+          for (const previousId of previousFeatured) {
+            const { error } = await window.supabaseClient
+              .from("events")
+              .update({ featured: true })
+              .eq("id", previousId);
+            if (error) rollbackErrors.push(error.message || String(error));
+          }
+          events.forEach((event) => {
+            event.featured = previousFeatured.some(
+              (id) => String(id) === String(event.id),
+            );
+          });
+          renderEvents();
+          const rollbackMessage = rollbackErrors.length
+            ? ` Featured state rollback failed: ${rollbackErrors.join("; ")}`
+            : "";
+          throw new Error(
+            `${targetError.message || targetError}.${rollbackMessage}`,
+          );
+        }
+
+        targetEvent.featured = true;
+        renderEvents();
+        setFeedback(
+          eventsFeedback,
+          `${targetEvent.title || "Event"} is now the featured event.`,
+          "success",
+        );
+      }
+
       async function loadDashboard() {
         const refreshButton = document.getElementById("refreshButton");
         refreshButton.disabled = true;
@@ -2080,11 +2133,23 @@
           }
 
           if (button.dataset.eventAction === "toggle-featured") {
-            await updateEvent(
-              record,
-              { featured: !Boolean(record.featured) },
-              "Featured event updated.",
-            );
+            if (record.featured) {
+              await updateEvent(
+                record,
+                { featured: false },
+                "Featured event cleared.",
+              );
+            } else {
+              try {
+                await featureEvent(record);
+              } catch (error) {
+                setFeedback(
+                  eventsFeedback,
+                  `Featured event update failed: ${error.message || error}`,
+                  "error",
+                );
+              }
+            }
             return;
           }
 
@@ -2140,24 +2205,44 @@
             return;
           }
 
+          const wantsFeatured =
+            document.getElementById("newEventFeatured").checked;
           const record = {
             title: document.getElementById("newEventTitle").value.trim(),
             subtitle: document.getElementById("newEventSubtitle").value.trim(),
             event_date: document.getElementById("newEventDate").value.trim(),
             location: document.getElementById("newEventLocation").value.trim(),
             spots_left: spots,
-            featured: document.getElementById("newEventFeatured").checked,
+            featured: false,
           };
           button.disabled = true;
           button.textContent = "Creating...";
           try {
-            const { error } = await window.supabaseClient
+            const { data, error } = await window.supabaseClient
               .from("events")
-              .insert([record]);
+              .insert([record])
+              .select(
+                "id, title, subtitle, event_date, location, spots_left, featured",
+              )
+              .single();
             if (error) throw error;
+            events.push(data);
+            if (wantsFeatured) {
+              try {
+                await featureEvent(data);
+              } catch (featureError) {
+                setFeedback(
+                  eventsFeedback,
+                  `Event created, but could not set it as featured: ${featureError.message || featureError}`,
+                  "error",
+                );
+              }
+            }
             document.getElementById("eventDialog").close();
             form.reset();
-            setFeedback(eventsFeedback, "Event created.", "success");
+            if (!wantsFeatured) {
+              setFeedback(eventsFeedback, "Event created.", "success");
+            }
             await loadDashboard();
           } catch (error) {
             setFeedback(
