@@ -59,6 +59,126 @@
         color: #fff;
       }
 
+      [hidden] {
+        display: none !important;
+      }
+
+      .member-status-bar {
+        position: fixed;
+        top: 72px;
+        left: 0;
+        right: 0;
+        z-index: 99;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 11px 40px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 15, 15, 0.96);
+        backdrop-filter: blur(14px);
+      }
+
+      .member-status-copy,
+      .member-status-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 14px;
+      }
+
+      .member-welcome {
+        color: var(--bone);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .member-quiz-link,
+      .member-quiz-complete,
+      .member-applications-pill {
+        color: rgba(243, 242, 237, 0.62);
+        font-size: 10px;
+        text-decoration: none;
+      }
+
+      .member-quiz-link:hover {
+        color: var(--bone);
+      }
+
+      .member-applications-pill {
+        padding: 6px 9px;
+        border: 1px solid rgba(123, 47, 255, 0.32);
+        border-radius: 100px;
+        color: #d3c0ff;
+      }
+
+      .member-logout {
+        border: 0;
+        background: transparent;
+        color: rgba(243, 242, 237, 0.48);
+        font-size: 10px;
+        cursor: pointer;
+      }
+
+      .member-logout:hover {
+        color: var(--bone);
+      }
+
+      .auth-mode-switch {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin: 0 0 24px;
+        padding: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.025);
+      }
+
+      .auth-mode-button {
+        min-height: 38px;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        background: transparent;
+        color: rgba(243, 242, 237, 0.46);
+        font-family: "DM Sans", sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .auth-mode-button.is-active {
+        border-color: rgba(123, 47, 255, 0.34);
+        background: rgba(123, 47, 255, 0.12);
+        color: var(--bone);
+      }
+
+      .event-status-badge {
+        display: block;
+        width: 100%;
+        margin-top: 10px;
+        padding: 9px 12px;
+        border: 1px solid rgba(123, 47, 255, 0.3);
+        border-radius: 8px;
+        background: rgba(123, 47, 255, 0.1);
+        color: #dbcaff;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+
+      .event-status-badge[data-status="approved"] {
+        border-color: rgba(91, 190, 130, 0.35);
+        background: rgba(91, 190, 130, 0.1);
+        color: #a7e4bf;
+      }
+
+      .event-status-badge[data-status="rejected"] {
+        border-color: rgba(255, 115, 115, 0.3);
+        background: rgba(255, 115, 115, 0.08);
+        color: #ffb0b0;
+      }
+
       /* ── GRAIN OVERLAY ─────────────────────────────────────────────── */
       body::before {
         content: "";
@@ -639,6 +759,18 @@
 
       .event-card.featured .spots-label {
         color: rgba(243, 242, 237, 0.4);
+      }
+
+      .event-card .event-status-badge {
+        color: #4a2d70;
+      }
+
+      .event-card .event-status-badge[data-status="approved"] {
+        color: #286044;
+      }
+
+      .event-card.featured .event-status-badge {
+        color: #dbcaff;
       }
 
       .btn-apply {
@@ -1545,12 +1677,37 @@
         <li><a href="#pricing">Pricing</a></li>
       </ul>
       <div class="nav-actions">
-        <button class="btn-ghost">Sign in</button>
-        <button class="btn-primary" onclick="openApplyModal()">
+        <button
+          class="btn-ghost"
+          id="nav-sign-in"
+          onclick="openApplyModal(null, 'login')"
+        >
+          Sign in
+        </button>
+        <button
+          class="btn-primary"
+          id="nav-apply-btn"
+          onclick="openApplyModal()"
+        >
           Apply Now
         </button>
       </div>
     </nav>
+
+    <section class="member-status-bar" id="member-status-bar" hidden>
+      <div class="member-status-copy">
+        <span class="member-welcome" id="member-welcome"></span>
+        <span id="member-quiz-status"></span>
+      </div>
+      <div class="member-status-actions">
+        <span class="member-applications-pill" id="member-applications-count"
+          >My Applications · 0</span
+        >
+        <button class="member-logout" id="member-logout" type="button">
+          Log Out
+        </button>
+      </div>
+    </section>
 
     <main>
       <!-- HERO -->
@@ -2222,7 +2379,6 @@
               </div>
               <button
                 class="btn-apply"
-                onclick="window.location.href = 'cirql-mcq.html'"
                 style="
                   margin-left: 16px;
                   background: rgba(10, 10, 10, 0.06);
@@ -2999,6 +3155,15 @@
     </footer>
 
     <script>
+      let memberApplicantId = null;
+      let memberProfile = null;
+      let memberQuizComplete = false;
+      let liveEventRecords = [];
+      let eventApplicationsByEventId = new Map();
+      let pendingEventId = null;
+      let pendingApplicant = null;
+      let pendingAuthMode = "signup";
+
       function setTextNode(node, value) {
         if (!node) return;
         const svgNode = node.querySelector("svg");
@@ -3118,11 +3283,16 @@
       function renderEventCard(card, eventItem, isFeatured) {
         if (!card || !eventItem) return;
 
+        card.dataset.eventId = String(eventItem.id ?? "");
+
         const titleNode = card.querySelector(".event-title");
         const metaRows = card.querySelectorAll(".event-meta-row");
         const spotsLabel = card.querySelector(".spots-label");
         const fill = card.querySelector(".spots-fill");
         const tag = card.querySelector(".event-tag");
+        const applyButton = card.querySelector(
+          ".btn-apply-outline, .btn-apply",
+        );
 
         const title = eventItem.title || "Untitled event";
         const subtitle = eventItem.subtitle || "";
@@ -3170,6 +3340,274 @@
           );
           fill.style.width = `${fillPercent}%`;
         }
+
+        if (applyButton) {
+          applyButton.type = "button";
+          applyButton.dataset.eventId = String(eventItem.id ?? "");
+          applyButton.style.opacity = "1";
+          applyButton.style.cursor = "pointer";
+        }
+
+        renderMemberEventState(card, eventItem);
+      }
+
+      function renderMemberEventState(card, eventItem) {
+        const applyButton = card.querySelector(
+          ".btn-apply-outline, .btn-apply",
+        );
+        if (!applyButton) return;
+        const existingBadge = card.querySelector(".event-status-badge");
+        const application = eventApplicationsByEventId.get(
+          String(eventItem.id),
+        );
+
+        if (application) {
+          applyButton.hidden = true;
+          const labels = {
+            requested: "⏳ Application Under Review",
+            approved: "✓ Spot Confirmed — You're In",
+            waitlisted: "🔒 Waitlisted",
+            rejected: "Application Closed",
+          };
+          const badge = existingBadge || document.createElement("span");
+          badge.className = "event-status-badge";
+          badge.dataset.status = application.status;
+          badge.textContent =
+            labels[application.status] || "Application Submitted";
+          if (!existingBadge)
+            applyButton.insertAdjacentElement("afterend", badge);
+          return;
+        }
+
+        if (existingBadge) existingBadge.remove();
+        applyButton.hidden = false;
+        applyButton.textContent = memberApplicantId
+          ? "Request Spot →"
+          : "Apply now →";
+      }
+
+      function readMemberValue(key) {
+        try {
+          const value =
+            sessionStorage.getItem(key) || localStorage.getItem(key) || "";
+          if (value) {
+            sessionStorage.setItem(key, value);
+            localStorage.setItem(key, value);
+          }
+          return value;
+        } catch (error) {
+          console.warn("Member storage is unavailable.", error);
+          return "";
+        }
+      }
+
+      function writeMemberSession(applicant, verified) {
+        const values = {
+          applicant_id: String(applicant.id),
+          applicant_phone: String(applicant.phone || "").replace(/\D/g, ""),
+          applicant_verified: String(Boolean(verified)),
+        };
+        try {
+          Object.entries(values).forEach(([key, value]) => {
+            localStorage.setItem(key, value);
+            sessionStorage.setItem(key, value);
+          });
+        } catch (error) {
+          console.warn("Member session could not be persisted.", error);
+        }
+      }
+
+      function clearMemberSession() {
+        [localStorage, sessionStorage].forEach((storage) => {
+          [
+            "applicant_id",
+            "applicant_phone",
+            "applicant_verified",
+            "pending_event_id",
+            "quiz_completed",
+          ].forEach((key) => storage.removeItem(key));
+        });
+        memberApplicantId = null;
+        memberProfile = null;
+        memberQuizComplete = false;
+        eventApplicationsByEventId = new Map();
+      }
+
+      function setPendingEvent(eventId) {
+        pendingEventId = eventId ? String(eventId) : null;
+        if (!eventId) return;
+        try {
+          localStorage.setItem("pending_event_id", pendingEventId);
+          sessionStorage.setItem("pending_event_id", pendingEventId);
+        } catch (error) {
+          console.warn("The selected event could not be remembered.", error);
+        }
+      }
+
+      function clearPendingEvent() {
+        pendingEventId = null;
+        [localStorage, sessionStorage].forEach((storage) =>
+          storage.removeItem("pending_event_id"),
+        );
+      }
+
+      function renderMemberStatusBar() {
+        const bar = document.getElementById("member-status-bar");
+        const signInButton = document.getElementById("nav-sign-in");
+        const applyButton = document.getElementById("nav-apply-btn");
+        if (!memberApplicantId) {
+          bar.hidden = true;
+          signInButton.hidden = false;
+          applyButton.textContent = "Apply Now";
+          applyButton.onclick = () => openApplyModal();
+          return;
+        }
+
+        const firstName = memberProfile?.first_name || "Member";
+        document.getElementById("member-welcome").textContent =
+          `Welcome back, ${firstName}`;
+        const quizStatus = document.getElementById("member-quiz-status");
+        if (memberQuizComplete) {
+          quizStatus.className = "member-quiz-complete";
+          quizStatus.textContent = "✓ Vibe Profile Complete";
+        } else {
+          quizStatus.className = "";
+          quizStatus.innerHTML = `<a class="member-quiz-link" href="cirql-mcq.html?applicant_id=${encodeURIComponent(memberApplicantId)}">Complete your Vibe Quiz →</a>`;
+        }
+        document.getElementById("member-applications-count").textContent =
+          `My Applications · ${eventApplicationsByEventId.size}`;
+        bar.hidden = false;
+        signInButton.hidden = true;
+        applyButton.textContent = "Find an Event";
+        applyButton.onclick = () =>
+          document.getElementById("events").scrollIntoView({
+            behavior: "smooth",
+          });
+      }
+
+      function renderMemberEventCards() {
+        document
+          .querySelectorAll(".event-card[data-event-id]")
+          .forEach((card) => {
+            const eventItem = liveEventRecords.find(
+              (item) => String(item.id) === card.dataset.eventId,
+            );
+            if (eventItem) renderMemberEventState(card, eventItem);
+          });
+      }
+
+      async function requestEventApplication(eventId) {
+        const id = readMemberValue("applicant_id");
+        const verified = readMemberValue("applicant_verified") === "true";
+        if (!id || !verified) {
+          setPendingEvent(eventId);
+          openApplyModal(eventId, "signup");
+          return;
+        }
+
+        const key = String(eventId);
+        if (eventApplicationsByEventId.has(key)) {
+          clearPendingEvent();
+          return;
+        }
+        const button = document.querySelector(
+          `.event-card[data-event-id="${CSS.escape(key)}"] .btn-apply-outline, .event-card[data-event-id="${CSS.escape(key)}"] .btn-apply`,
+        );
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Requesting...";
+        }
+
+        try {
+          const { data, error } = await window.supabaseClient
+            .from("event_applications")
+            .insert({
+              event_id: eventId,
+              applicant_id: id,
+              status: "requested",
+            })
+            .select("event_id, status")
+            .single();
+          if (error) throw error;
+          eventApplicationsByEventId.set(
+            key,
+            data || { event_id: eventId, status: "requested" },
+          );
+          renderMemberEventCards();
+          renderMemberStatusBar();
+          clearPendingEvent();
+        } catch (error) {
+          if (button) {
+            button.disabled = false;
+            button.textContent = "Request Spot →";
+          }
+          console.error("Event application failed:", error);
+        }
+      }
+
+      async function loadMemberDashboard() {
+        const applicantId = readMemberValue("applicant_id");
+        const applicantPhone = readMemberValue("applicant_phone");
+        const verified = readMemberValue("applicant_verified") === "true";
+        if (!applicantId || !verified) {
+          memberApplicantId = null;
+          memberProfile = null;
+          memberQuizComplete = false;
+          eventApplicationsByEventId = new Map();
+          renderMemberStatusBar();
+          renderMemberEventCards();
+          return;
+        }
+
+        memberApplicantId = applicantId;
+        try {
+          const [profileResult, quizResult, applicationsResult] =
+            await Promise.all([
+              window.supabaseClient
+                .from("applicants")
+                .select("id, first_name, last_name, phone, email, intent")
+                .eq("id", applicantId)
+                .maybeSingle(),
+              window.supabaseClient
+                .from("quiz_responses")
+                .select("applicant_id")
+                .eq("applicant_id", applicantId)
+                .limit(1),
+              window.supabaseClient
+                .from("event_applications")
+                .select("event_id, status")
+                .eq("applicant_id", applicantId),
+            ]);
+
+          if (profileResult.error) throw profileResult.error;
+          if (quizResult.error) throw quizResult.error;
+          if (applicationsResult.error) throw applicationsResult.error;
+
+          memberProfile = profileResult.data || memberProfile || {};
+          if (!memberProfile.phone) memberProfile.phone = applicantPhone;
+          memberQuizComplete = (quizResult.data || []).length > 0;
+          eventApplicationsByEventId = new Map(
+            (applicationsResult.data || []).map((application) => [
+              String(application.event_id),
+              application,
+            ]),
+          );
+          renderMemberStatusBar();
+          renderMemberEventCards();
+
+          const pendingId =
+            pendingEventId ||
+            sessionStorage.getItem("pending_event_id") ||
+            localStorage.getItem("pending_event_id");
+          if (pendingId && !eventApplicationsByEventId.has(String(pendingId))) {
+            await requestEventApplication(pendingId);
+          } else if (pendingId) {
+            clearPendingEvent();
+          }
+        } catch (error) {
+          console.error("Member status could not be loaded:", error);
+          renderMemberStatusBar();
+        }
       }
 
       async function loadEvents() {
@@ -3198,7 +3636,7 @@
           const { data, error } = await window.supabaseClient
             .from("events")
             .select(
-              "title, subtitle, event_date, location, spots_left, featured",
+              "id, title, subtitle, event_date, location, spots_left, featured",
             )
             .order("featured", { ascending: false })
             .order("event_date", { ascending: true });
@@ -3208,6 +3646,7 @@
           }
 
           const records = Array.isArray(data) ? data : [];
+          liveEventRecords = records;
           const cardsArray = Array.from(cards);
           const featuredRecord =
             records.find((record) => record.featured) || records[0] || null;
@@ -3291,9 +3730,10 @@
         }
       }
 
-      document.addEventListener("DOMContentLoaded", () => {
-        loadEvents();
+      document.addEventListener("DOMContentLoaded", async () => {
+        await loadEvents();
         loadMatchReveal();
+        await loadMemberDashboard();
       });
     </script>
 
@@ -3382,6 +3822,24 @@
         >
           We'll review your application and get back to you within 48 hours.
         </p>
+
+        <div
+          class="auth-mode-switch"
+          id="auth-mode-switch"
+          role="group"
+          aria-label="Member access mode"
+        >
+          <button
+            class="auth-mode-button is-active"
+            type="button"
+            data-auth-mode="signup"
+          >
+            New Member Sign Up
+          </button>
+          <button class="auth-mode-button" type="button" data-auth-mode="login">
+            Existing Member Login
+          </button>
+        </div>
 
         <form
           id="applicant-form"
@@ -3616,6 +4074,62 @@
           </div>
         </form>
 
+        <form
+          id="member-login-container"
+          style="display: none; flex-direction: column; gap: 16px"
+        >
+          <div>
+            <label
+              for="member-login-identifier"
+              style="
+                font-size: 12px;
+                font-weight: 600;
+                color: rgba(243, 242, 237, 0.4);
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                display: block;
+                margin-bottom: 8px;
+              "
+              >Phone number or email</label
+            >
+            <input
+              id="member-login-identifier"
+              type="text"
+              autocomplete="username"
+              placeholder="Phone number or email"
+              style="
+                width: 100%;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 12px;
+                padding: 12px 16px;
+                font-size: 14px;
+                color: var(--bone);
+                font-family: &quot;DM Sans&quot;, sans-serif;
+                outline: none;
+              "
+            />
+          </div>
+          <p
+            id="member-login-feedback"
+            role="status"
+            style="
+              min-height: 16px;
+              margin: 0;
+              color: rgba(243, 242, 237, 0.55);
+              font-size: 12px;
+            "
+          ></p>
+          <button
+            id="member-login-continue"
+            class="btn-vibe"
+            type="submit"
+            style="width: 100%; margin-top: 8px; border-radius: 14px"
+          >
+            Continue →
+          </button>
+        </form>
+
         <!-- OTP CONTAINER (FLEX) -->
         <div
           id="otp-container"
@@ -3712,21 +4226,63 @@
           });
         });
 
+      function setAuthMode(mode) {
+        const signup = mode === "signup";
+        const login = mode === "login";
+        const switcher = document.getElementById("auth-mode-switch");
+        const signupForm = document.getElementById("applicant-form");
+        const loginForm = document.getElementById("member-login-container");
+        const otpContainer = document.getElementById("otp-container");
+        const title = document.getElementById("modal-title");
+        const subtitle = document.getElementById("modal-subtitle");
+
+        if (mode !== "otp") pendingAuthMode = mode;
+        switcher.style.display = mode === "otp" ? "none" : "grid";
+        signupForm.style.display = signup ? "flex" : "none";
+        loginForm.style.display = login ? "flex" : "none";
+        otpContainer.style.display = mode === "otp" ? "flex" : "none";
+        document.querySelectorAll("[data-auth-mode]").forEach((button) => {
+          button.classList.toggle(
+            "is-active",
+            button.dataset.authMode === mode,
+          );
+        });
+
+        if (signup) {
+          title.textContent = "Apply to attend";
+          subtitle.textContent =
+            "We'll review your application and get back to you within 48 hours.";
+        } else if (login) {
+          title.textContent = "Member Login";
+          subtitle.textContent =
+            "Enter the phone number or email on your member profile.";
+        } else {
+          title.textContent = "Verify Phone";
+          subtitle.textContent = "Enter the 6-digit demo OTP code to continue.";
+        }
+      }
+
+      function showOtpStep(applicant, mode) {
+        pendingApplicant = applicant;
+        pendingAuthMode = mode;
+        writeMemberSession(applicant, false);
+        setAuthMode("otp");
+        document.getElementById("otp-input").value = "";
+      }
+
       function resetModal() {
         const formContainer = document.getElementById("apply-form-container");
-        const otpContainer = document.getElementById("otp-container");
-        const modalTitle = document.getElementById("modal-title");
-        const modalSubtitle = document.getElementById("modal-subtitle");
         const applyBtn = document.getElementById("apply-submit-btn");
         const otpBtn = document.getElementById("otp-submit-btn");
         const otpInput = document.getElementById("otp-input");
+        const loginIdentifier = document.getElementById(
+          "member-login-identifier",
+        );
 
         if (formContainer) formContainer.style.display = "flex";
-        if (otpContainer) otpContainer.style.display = "none";
-        if (modalTitle) modalTitle.textContent = "Apply to attend";
-        if (modalSubtitle)
-          modalSubtitle.textContent =
-            "We'll review your application and get back to you within 48 hours.";
+        setAuthMode("signup");
+        pendingApplicant = null;
+        document.getElementById("member-login-feedback").textContent = "";
 
         if (applyBtn) {
           applyBtn.textContent = "Submit application →";
@@ -3739,6 +4295,7 @@
         if (otpInput) {
           otpInput.value = "";
         }
+        if (loginIdentifier) loginIdentifier.value = "";
       }
 
       function closeApplyModal() {
@@ -3746,10 +4303,92 @@
         resetModal();
       }
 
-      function openApplyModal() {
+      function openApplyModal(eventId = null, mode = "signup") {
+        if (eventId) setPendingEvent(eventId);
         resetModal();
+        setAuthMode(mode);
         document.getElementById("apply-modal").style.display = "flex";
       }
+
+      document
+        .querySelector(".events-grid")
+        .addEventListener("click", (event) => {
+          const button = event.target.closest(".btn-apply-outline, .btn-apply");
+          if (!button || button.disabled) return;
+          event.preventDefault();
+          const eventId =
+            button.dataset.eventId ||
+            button.closest(".event-card")?.dataset.eventId;
+          if (eventId) {
+            requestEventApplication(eventId);
+          } else {
+            openApplyModal();
+          }
+        });
+
+      document.getElementById("member-logout").addEventListener("click", () => {
+        clearMemberSession();
+        window.location.reload();
+      });
+
+      document.querySelectorAll("[data-auth-mode]").forEach((button) => {
+        button.addEventListener("click", () => {
+          pendingApplicant = null;
+          setAuthMode(button.dataset.authMode);
+        });
+      });
+
+      document
+        .getElementById("member-login-container")
+        .addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const input = document.getElementById("member-login-identifier");
+          const identifier = input.value.trim();
+          const loginFeedback = document.getElementById(
+            "member-login-feedback",
+          );
+          if (!identifier) {
+            loginFeedback.textContent = "Enter your phone number or email.";
+            return;
+          }
+
+          const isEmail = identifier.includes("@");
+          const normalized = isEmail
+            ? identifier.toLowerCase()
+            : identifier.replace(/\D/g, "");
+          if (!isEmail && normalized.length < 10) {
+            loginFeedback.textContent = "Enter a valid phone number or email.";
+            return;
+          }
+
+          const submitButton = document.getElementById("member-login-continue");
+          submitButton.disabled = true;
+          submitButton.textContent = "Looking up member...";
+          loginFeedback.textContent = "";
+          try {
+            let query = window.supabaseClient
+              .from("applicants")
+              .select("id, first_name, last_name, phone, email, status");
+            query = isEmail
+              ? query.eq("email", normalized)
+              : query.eq("phone", normalized);
+            const { data, error } = await query.maybeSingle();
+            if (error) throw error;
+            if (!data) {
+              loginFeedback.textContent =
+                "No member account found. Choose New Member Sign Up to join.";
+              return;
+            }
+
+            data.phone = data.phone || normalized;
+            showOtpStep(data, "login");
+          } catch (error) {
+            loginFeedback.textContent = `Member lookup failed: ${error.message || error}`;
+          } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = "Continue →";
+          }
+        });
 
       // Apply button submit feedback and transition to OTP
       const applyBtn = document.getElementById("apply-submit-btn");
@@ -3809,25 +4448,12 @@
               throw error;
             }
 
-            const applicantId = data && data[0] && data[0].id;
-            if (applicantId !== undefined && applicantId !== null) {
-              sessionStorage.setItem("applicant_id", String(applicantId));
+            const applicant = data && data[0];
+            if (!applicant?.id) {
+              throw new Error("Applicant record was not returned by Supabase.");
             }
-            sessionStorage.setItem("applicant_phone", phoneDigits);
-
-            const formContainer = document.getElementById(
-              "apply-form-container",
-            );
-            const otpContainer = document.getElementById("otp-container");
-            const modalTitle = document.getElementById("modal-title");
-            const modalSubtitle = document.getElementById("modal-subtitle");
-
-            if (formContainer) formContainer.style.display = "none";
-            if (otpContainer) otpContainer.style.display = "flex";
-            if (modalTitle) modalTitle.textContent = "Verify Phone";
-            if (modalSubtitle)
-              modalSubtitle.textContent =
-                "Please enter the 6-digit OTP code sent to your phone to complete your login.";
+            applicant.phone = phoneDigits;
+            showOtpStep(applicant, "signup");
 
             applyBtn.textContent = "✓ Application submitted!";
             applyBtn.style.background = "#16a34a";
@@ -3859,11 +4485,17 @@
             return;
           }
 
-          sessionStorage.setItem("applicant_verified", "true");
-
           try {
-            const applicantId = sessionStorage.getItem("applicant_id");
-            if (applicantId) {
+            const applicant = pendingApplicant;
+            const applicantId = String(
+              applicant?.id || readMemberValue("applicant_id"),
+            );
+            if (!applicantId || applicantId === "undefined") {
+              throw new Error("Applicant session could not be restored.");
+            }
+
+            const protectedStatuses = ["approved", "waitlisted", "rejected"];
+            if (!protectedStatuses.includes(applicant?.status)) {
               const { error } = await window.supabaseClient
                 .from("applicants")
                 .update({ status: "verified" })
@@ -3874,8 +4506,19 @@
               }
             }
 
+            const verifiedApplicant = {
+              ...(applicant || {}),
+              id: applicantId,
+              phone: applicant?.phone || readMemberValue("applicant_phone"),
+            };
+            writeMemberSession(verifiedApplicant, true);
+            memberApplicantId = applicantId;
+            memberProfile = verifiedApplicant;
+
             otpBtn.textContent =
-              "✓ Phone Verified! Taking you to the vibe check...";
+              pendingAuthMode === "signup"
+                ? "✓ Phone Verified! Taking you to the vibe check..."
+                : "✓ Phone Verified! Welcome back.";
             otpBtn.style.background = "#16a34a";
             otpBtn.disabled = true;
 
@@ -3883,9 +4526,14 @@
               otpInput.value = code;
             }
 
+            if (pendingAuthMode === "login") {
+              closeApplyModal();
+              await loadMemberDashboard();
+              return;
+            }
+
             setTimeout(() => {
               const quizUrl = new URL("cirql-mcq.html", window.location.href);
-              const applicantId = sessionStorage.getItem("applicant_id");
               if (applicantId) {
                 quizUrl.searchParams.set("applicant_id", applicantId);
               }

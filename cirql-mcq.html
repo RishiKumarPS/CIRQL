@@ -558,17 +558,42 @@
           ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
           : null);
 
+      function readApplicantStorage(key) {
+        try {
+          const value =
+            sessionStorage.getItem(key) || localStorage.getItem(key) || "";
+          if (value) {
+            sessionStorage.setItem(key, value);
+            localStorage.setItem(key, value);
+          }
+          return value;
+        } catch (error) {
+          console.warn("Applicant storage could not be read.", error);
+          return "";
+        }
+      }
+
+      function writeApplicantStorage(key, value) {
+        try {
+          sessionStorage.setItem(key, value);
+          localStorage.setItem(key, value);
+        } catch (error) {
+          console.warn("Applicant storage could not be synchronized.", error);
+        }
+      }
+
       function resolveApplicantId() {
         try {
-          const fromSession = sessionStorage.getItem("applicant_id");
-          if (fromSession) return fromSession;
-
+          readApplicantStorage("applicant_phone");
+          readApplicantStorage("applicant_verified");
           const params = new URLSearchParams(window.location.search);
           const fromQuery = params.get("applicant_id");
           if (fromQuery) {
-            sessionStorage.setItem("applicant_id", fromQuery);
+            writeApplicantStorage("applicant_id", fromQuery);
             return fromQuery;
           }
+          const fromStorage = readApplicantStorage("applicant_id");
+          if (fromStorage) return fromStorage;
         } catch (error) {
           console.warn(
             "Applicant session could not be resolved; continuing in demo mode.",
@@ -1213,7 +1238,7 @@
               }
             }
 
-            sessionStorage.setItem("quiz_completed", "true");
+            writeApplicantStorage("quiz_completed", "true");
             document.getElementById("resultOverlay").classList.add("show");
             window.scrollTo({ top: 0 });
           } catch (error) {
@@ -1221,7 +1246,7 @@
               "Quiz submission failed; continuing in demo mode.",
               error,
             );
-            sessionStorage.setItem("quiz_completed", "true");
+            writeApplicantStorage("quiz_completed", "true");
             document.getElementById("resultOverlay").classList.add("show");
             window.scrollTo({ top: 0 });
           } finally {
