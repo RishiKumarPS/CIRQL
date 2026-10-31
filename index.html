@@ -3,6 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+      {
+        const SUPABASE_URL = "https://wwpvszvnrsemoqjrcqpq.supabase.co";
+        const SUPABASE_ANON_KEY =
+          "sb_publishable_suEQwEixEa1mOPjmDnck1Q_o4WGKVCz";
+        const supabase = window.supabase.createClient(
+          SUPABASE_URL,
+          SUPABASE_ANON_KEY,
+        );
+        window.supabaseClient = supabase;
+      }
+    </script>
     <title>CIRQL — Curated Connections. Real Life.</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
@@ -1610,8 +1623,7 @@
           <div>
             <p class="section-eyebrow">The process</p>
             <h2 class="section-h2">
-              Four steps to your<br /><em>best experience at CIRQL.
-              </em>
+              Four steps to your<br /><em>best experience at CIRQL. </em>
             </h2>
           </div>
           <p
@@ -1679,9 +1691,9 @@
               We screen &<br /><em>approve you</em>
             </h3>
             <p class="step-desc">
-              Our AI model reviews every application. We verify identity,
-              check for intent alignment, and ensure balanced ratios — so the
-              room feels right.
+              Our AI model reviews every application. We verify identity, check
+              for intent alignment, and ensure balanced ratios — so the room
+              feels right.
             </p>
           </div>
 
@@ -1731,8 +1743,8 @@
               A link appears on your phone &<br /><em>tap to reveal</em>
             </h3>
             <p class="step-desc">
-              At our event everyone gets a message on their phones. Your
-              top match appears on your screen at the exact same moment they see
+              At our event everyone gets a message on their phones. Your top
+              match appears on your screen at the exact same moment they see
               yours.
             </p>
           </div>
@@ -1878,7 +1890,9 @@
         <div class="events-header">
           <div class="events-header-text">
             <p class="section-eyebrow">Upcoming</p>
-            <h2 class="section-h2">Find your<br /><em>next CIRQL experience.</em></h2>
+            <h2 class="section-h2">
+              Find your<br /><em>next CIRQL experience.</em>
+            </h2>
             <p class="section-sub">
               Every event is different — different venues, themes, and crowd
               sizes. See what's coming up and apply before spots fill.
@@ -2332,7 +2346,9 @@
             <div class="qr-phone">
               <div class="qr-notch"></div>
               <div class="qr-phone-screen">
-                <p class="qr-reveal-label">Scan to reveal</p>
+                <p class="qr-reveal-label" id="match-reveal-label">
+                  Scan to reveal
+                </p>
                 <div class="qr-code-box">
                   <div class="qr-corner tl"></div>
                   <div class="qr-corner tr"></div>
@@ -2423,9 +2439,15 @@
                   </svg>
                 </div>
                 <div class="match-reveal-card">
-                  <div class="match-reveal-pct">97.4%</div>
-                  <div class="match-reveal-name">Arjun M.</div>
-                  <div class="match-reveal-sub">Your CIRQL match</div>
+                  <div class="match-reveal-pct" id="match-reveal-pct">
+                    97.4%
+                  </div>
+                  <div class="match-reveal-name" id="match-reveal-name">
+                    Arjun M.
+                  </div>
+                  <div class="match-reveal-sub" id="match-reveal-sub">
+                    Your CIRQL match
+                  </div>
                 </div>
                 <p
                   style="
@@ -2442,8 +2464,12 @@
             <div class="phone-float-badge">
               <div class="float-dot"></div>
               <div>
-                <div class="float-text">Match revealed</div>
-                <div class="float-sub">Just now · 12:00 AM</div>
+                <div class="float-text" id="match-reveal-status">
+                  Match revealed
+                </div>
+                <div class="float-sub" id="match-reveal-time">
+                  Just now · 12:00 AM
+                </div>
               </div>
             </div>
           </div>
@@ -2972,6 +2998,305 @@
       </div>
     </footer>
 
+    <script>
+      function setTextNode(node, value) {
+        if (!node) return;
+        const svgNode = node.querySelector("svg");
+        node.textContent = "";
+        if (svgNode) {
+          node.appendChild(svgNode.cloneNode(true));
+        }
+        node.appendChild(document.createTextNode(value));
+      }
+
+      function renderMatchReveal(match) {
+        const label = document.getElementById("match-reveal-label");
+        const score = document.getElementById("match-reveal-pct");
+        const name = document.getElementById("match-reveal-name");
+        const subtitle = document.getElementById("match-reveal-sub");
+        const status = document.getElementById("match-reveal-status");
+        const time = document.getElementById("match-reveal-time");
+        const revealAt = new Date(match.reveal_at);
+
+        if (Number.isNaN(revealAt.getTime())) return;
+
+        const renderCountdown = () => {
+          const remainingMinutes = Math.max(
+            0,
+            Math.ceil((revealAt.getTime() - Date.now()) / 60000),
+          );
+
+          if (remainingMinutes === 0) {
+            window.clearInterval(countdownInterval);
+            if (label) label.textContent = "Your match is here";
+            if (score) score.textContent = `${match.compatibility_score}%`;
+            if (name) name.textContent = match.matched_name || "Your match";
+            if (subtitle) subtitle.textContent = "Your CIRQL match";
+            if (status) status.textContent = "Match revealed";
+            if (time) time.textContent = "Just now";
+            return;
+          }
+
+          const hours = Math.floor(remainingMinutes / 60);
+          const minutes = remainingMinutes % 60;
+          const countdown = `${String(hours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m`;
+
+          if (label) label.textContent = "Reveal countdown";
+          if (score) score.textContent = "—";
+          if (name) name.textContent = "Your match is waiting";
+          if (subtitle) subtitle.textContent = `Reveals in ${countdown}`;
+          if (status) status.textContent = "Match reveal";
+          if (time) time.textContent = `In ${countdown}`;
+        };
+
+        let countdownInterval;
+        if (revealAt.getTime() <= Date.now()) {
+          if (label) label.textContent = "Your match is here";
+          if (score) score.textContent = `${match.compatibility_score}%`;
+          if (name) name.textContent = match.matched_name || "Your match";
+          if (subtitle) subtitle.textContent = "Your CIRQL match";
+          if (status) status.textContent = "Match revealed";
+          if (time) time.textContent = "Just now";
+          return;
+        }
+
+        renderCountdown();
+        countdownInterval = window.setInterval(renderCountdown, 1000);
+      }
+
+      async function loadMatchReveal() {
+        let applicantId;
+        try {
+          applicantId = sessionStorage.getItem("applicant_id");
+        } catch (error) {
+          console.warn(
+            "Applicant session unavailable; showing match teaser.",
+            error,
+          );
+          return;
+        }
+
+        if (!applicantId) return;
+
+        try {
+          const { data, error } = await window.supabaseClient
+            .from("matches")
+            .select("matched_name, compatibility_score, reveal_at")
+            .eq("applicant_id", applicantId)
+            .order("created_at", { ascending: false })
+            .limit(1);
+
+          if (error) throw error;
+          if (data && data[0]) renderMatchReveal(data[0]);
+        } catch (error) {
+          console.error("Failed to load match reveal:", error);
+        }
+      }
+
+      function formatEventDate(value) {
+        if (!value) return "Date TBA";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "Date TBA";
+        return new Intl.DateTimeFormat("en-IN", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        }).format(date);
+      }
+
+      function formatEventTime(value) {
+        if (!value) return "Time TBA";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "Time TBA";
+        return new Intl.DateTimeFormat("en-IN", {
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(date);
+      }
+
+      function renderEventCard(card, eventItem, isFeatured) {
+        if (!card || !eventItem) return;
+
+        const titleNode = card.querySelector(".event-title");
+        const metaRows = card.querySelectorAll(".event-meta-row");
+        const spotsLabel = card.querySelector(".spots-label");
+        const fill = card.querySelector(".spots-fill");
+        const tag = card.querySelector(".event-tag");
+
+        const title = eventItem.title || "Untitled event";
+        const subtitle = eventItem.subtitle || "";
+        const location = eventItem.location || "Location TBA";
+        const spotsLeft = Number(eventItem.spots_left ?? 0);
+        const eventDate = eventItem.event_date || null;
+
+        if (titleNode) {
+          titleNode.innerHTML = subtitle
+            ? `${title} — <em class="serif" style="font-style: italic; font-family: \"Fraunces\", serif;">${subtitle}</em>`
+            : title;
+        }
+
+        if (tag) {
+          tag.className = `event-tag ${isFeatured ? "tag-live-dark" : "tag-soon"}`;
+          tag.innerHTML = isFeatured
+            ? '<span class="tag-dot"></span> Applications open'
+            : "Coming soon";
+        }
+
+        if (metaRows[0]) {
+          const dateText = `${formatEventDate(eventDate)} · ${formatEventTime(eventDate)}`;
+          setTextNode(metaRows[0], dateText);
+        }
+
+        if (metaRows[1]) {
+          setTextNode(metaRows[1], location);
+        }
+
+        if (metaRows[2]) {
+          const capacityText = isFeatured
+            ? `Ages 21–26 · ${Math.max(spotsLeft, 0)} spots left · Curated 50/50 split`
+            : `Ages 21–26 · ${Math.max(spotsLeft, 0)} spots left · ${eventItem.featured ? "Featured" : "Community"}`;
+          setTextNode(metaRows[2], capacityText);
+        }
+
+        if (spotsLabel) {
+          spotsLabel.textContent = `${Math.max(spotsLeft, 0)} spots left`;
+        }
+
+        if (fill) {
+          const fillPercent = Math.max(
+            0,
+            Math.min(100, (spotsLeft / 60) * 100),
+          );
+          fill.style.width = `${fillPercent}%`;
+        }
+      }
+
+      async function loadEvents() {
+        const cards = document.querySelectorAll(".event-card");
+        cards.forEach((card) => {
+          const titleNode = card.querySelector(".event-title");
+          const spotsLabel = card.querySelector(".spots-label");
+          const fill = card.querySelector(".spots-fill");
+          const tag = card.querySelector(".event-tag");
+
+          if (titleNode) {
+            titleNode.innerHTML = "Loading...";
+          }
+          if (spotsLabel) {
+            spotsLabel.textContent = "Loading...";
+          }
+          if (fill) {
+            fill.style.width = "0%";
+          }
+          if (tag) {
+            tag.innerHTML = "Loading...";
+          }
+        });
+
+        try {
+          const { data, error } = await window.supabaseClient
+            .from("events")
+            .select(
+              "title, subtitle, event_date, location, spots_left, featured",
+            )
+            .order("featured", { ascending: false })
+            .order("event_date", { ascending: true });
+
+          if (error) {
+            throw error;
+          }
+
+          const records = Array.isArray(data) ? data : [];
+          const cardsArray = Array.from(cards);
+          const featuredRecord =
+            records.find((record) => record.featured) || records[0] || null;
+          const secondaryRecords = records
+            .filter((record) => record !== featuredRecord)
+            .slice(0, cardsArray.length - 1);
+
+          if (featuredRecord) {
+            renderEventCard(cardsArray[0], featuredRecord, true);
+          }
+
+          secondaryRecords.forEach((record, index) => {
+            const cardIndex = index + 1;
+            if (cardsArray[cardIndex]) {
+              renderEventCard(cardsArray[cardIndex], record, false);
+            }
+          });
+
+          cardsArray.forEach((card, index) => {
+            if (index === 0) return;
+            const eventIndex = index - 1;
+            if (eventIndex >= secondaryRecords.length) {
+              const titleNode = card.querySelector(".event-title");
+              const spotsLabel = card.querySelector(".spots-label");
+              const tag = card.querySelector(".event-tag");
+              const metaRows = card.querySelectorAll(".event-meta-row");
+
+              if (titleNode) {
+                titleNode.innerHTML = "More details soon";
+              }
+              if (spotsLabel) {
+                spotsLabel.textContent = "Waitlist";
+              }
+              if (tag) {
+                tag.innerHTML = "Coming soon";
+              }
+              if (metaRows[0]) setTextNode(metaRows[0], "Date TBA");
+              if (metaRows[1]) setTextNode(metaRows[1], "Location TBA");
+              if (metaRows[2])
+                setTextNode(metaRows[2], "Ages 21–26 · Waitlist open");
+            }
+          });
+
+          if (!records.length) {
+            const noDataTitle = cardsArray[0]?.querySelector(".event-title");
+            if (noDataTitle) {
+              noDataTitle.innerHTML = "No events yet";
+            }
+            cardsArray.forEach((card, index) => {
+              if (index === 0) return;
+              const titleNode = card.querySelector(".event-title");
+              if (titleNode) titleNode.innerHTML = "Check back soon";
+            });
+          }
+        } catch (error) {
+          console.error("Failed to load events:", error);
+          const cardsArray = Array.from(
+            document.querySelectorAll(".event-card"),
+          );
+          cardsArray.forEach((card, index) => {
+            const titleNode = card.querySelector(".event-title");
+            const spotsLabel = card.querySelector(".spots-label");
+            const tag = card.querySelector(".event-tag");
+
+            if (titleNode) {
+              titleNode.innerHTML =
+                index === 0
+                  ? "Event schedule unavailable"
+                  : "More details soon";
+            }
+            if (spotsLabel) {
+              spotsLabel.textContent = "Check back soon";
+            }
+            if (tag) {
+              tag.innerHTML =
+                index === 0
+                  ? '<span class="tag-dot"></span> Try again later'
+                  : "Coming soon";
+            }
+          });
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        loadEvents();
+        loadMatchReveal();
+      });
+    </script>
+
     <!-- APPLICATION MODAL -->
     <div
       id="apply-modal"
@@ -3058,11 +3383,78 @@
           We'll review your application and get back to you within 48 hours.
         </p>
 
-        <div
-          id="apply-form-container"
+        <form
+          id="applicant-form"
           style="display: flex; flex-direction: column; gap: 16px"
         >
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+          <div
+            id="apply-form-container"
+            style="display: flex; flex-direction: column; gap: 16px"
+          >
+            <div
+              style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px"
+            >
+              <div>
+                <label
+                  style="
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: rgba(243, 242, 237, 0.4);
+                    text-transform: uppercase;
+                    letter-spacing: 0.08em;
+                    display: block;
+                    margin-bottom: 8px;
+                  "
+                  >First name</label
+                >
+                <input
+                  id="first-name"
+                  type="text"
+                  placeholder="Priya"
+                  style="
+                    width: 100%;
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 12px;
+                    padding: 12px 16px;
+                    font-size: 14px;
+                    color: var(--bone);
+                    font-family: &quot;DM Sans&quot;, sans-serif;
+                    outline: none;
+                  "
+                />
+              </div>
+              <div>
+                <label
+                  style="
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: rgba(243, 242, 237, 0.4);
+                    text-transform: uppercase;
+                    letter-spacing: 0.08em;
+                    display: block;
+                    margin-bottom: 8px;
+                  "
+                  >Last name</label
+                >
+                <input
+                  id="last-name"
+                  type="text"
+                  placeholder="Sharma"
+                  style="
+                    width: 100%;
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 12px;
+                    padding: 12px 16px;
+                    font-size: 14px;
+                    color: var(--bone);
+                    font-family: &quot;DM Sans&quot;, sans-serif;
+                    outline: none;
+                  "
+                />
+              </div>
+            </div>
             <div>
               <label
                 style="
@@ -3074,11 +3466,12 @@
                   display: block;
                   margin-bottom: 8px;
                 "
-                >First name</label
+                >Email</label
               >
               <input
-                type="text"
-                placeholder="Priya"
+                id="email"
+                type="email"
+                placeholder="priya@email.com"
                 style="
                   width: 100%;
                   background: rgba(255, 255, 255, 0.05);
@@ -3103,11 +3496,14 @@
                   display: block;
                   margin-bottom: 8px;
                 "
-                >Last name</label
+                >Age</label
               >
               <input
-                type="text"
-                placeholder="Sharma"
+                id="age"
+                type="number"
+                placeholder="24"
+                min="21"
+                max="26"
                 style="
                   width: 100%;
                   background: rgba(255, 255, 255, 0.05);
@@ -3121,161 +3517,104 @@
                 "
               />
             </div>
-          </div>
-          <div>
-            <label
+            <div>
+              <label
+                style="
+                  font-size: 12px;
+                  font-weight: 600;
+                  color: rgba(243, 242, 237, 0.4);
+                  text-transform: uppercase;
+                  letter-spacing: 0.08em;
+                  display: block;
+                  margin-bottom: 8px;
+                "
+                >What are you looking for?</label
+              >
+              <select
+                id="intent"
+                style="
+                  width: 100%;
+                  background: rgba(255, 255, 255, 0.05);
+                  border: 1px solid rgba(255, 255, 255, 0.1);
+                  border-radius: 12px;
+                  padding: 12px 16px;
+                  font-size: 14px;
+                  color: var(--bone);
+                  font-family: &quot;DM Sans&quot;, sans-serif;
+                  outline: none;
+                  cursor: pointer;
+                "
+              >
+                <option style="background: #0a0a0a" value="">
+                  Select one...
+                </option>
+                <option style="background: #0a0a0a" value="romantic">
+                  Romantic connection
+                </option>
+                <option style="background: #0a0a0a" value="friendship">
+                  Genuine friendship
+                </option>
+                <option style="background: #0a0a0a" value="both">
+                  Open to both
+                </option>
+                <option style="background: #0a0a0a" value="networking">
+                  Professional networking
+                </option>
+              </select>
+            </div>
+            <div>
+              <label
+                style="
+                  font-size: 12px;
+                  font-weight: 600;
+                  color: rgba(243, 242, 237, 0.4);
+                  text-transform: uppercase;
+                  letter-spacing: 0.08em;
+                  display: block;
+                  margin-bottom: 8px;
+                "
+                >Phone</label
+              >
+              <input
+                id="phone"
+                type="tel"
+                placeholder="0000000000"
+                min="7000000000"
+                max="9999999999"
+                style="
+                  width: 100%;
+                  background: rgba(255, 255, 255, 0.05);
+                  border: 1px solid rgba(255, 255, 255, 0.1);
+                  border-radius: 12px;
+                  padding: 12px 16px;
+                  font-size: 14px;
+                  color: var(--bone);
+                  font-family: &quot;DM Sans&quot;, sans-serif;
+                  outline: none;
+                "
+              />
+            </div>
+            <button
+              id="apply-submit-btn"
+              type="submit"
+              class="btn-vibe"
+              style="width: 100%; margin-top: 8px; border-radius: 14px"
+            >
+              Submit application →
+            </button>
+            <p
               style="
                 font-size: 12px;
-                font-weight: 600;
-                color: rgba(243, 242, 237, 0.4);
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-                display: block;
-                margin-bottom: 8px;
+                color: rgba(243, 242, 237, 0.25);
+                text-align: center;
+                line-height: 1.5;
               "
-              >Email</label
             >
-            <input
-              type="email"
-              placeholder="priya@email.com"
-              style="
-                width: 100%;
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 12px;
-                padding: 12px 16px;
-                font-size: 14px;
-                color: var(--bone);
-                font-family: &quot;DM Sans&quot;, sans-serif;
-                outline: none;
-              "
-            />
+              By applying you agree to our community guidelines. We require ID
+              verification upon approval.
+            </p>
           </div>
-          <div>
-            <label
-              style="
-                font-size: 12px;
-                font-weight: 600;
-                color: rgba(243, 242, 237, 0.4);
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-                display: block;
-                margin-bottom: 8px;
-              "
-              >Age</label
-            >
-            <input
-              type="number"
-              placeholder="24"
-              min="21"
-              max="26"
-              style="
-                width: 100%;
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 12px;
-                padding: 12px 16px;
-                font-size: 14px;
-                color: var(--bone);
-                font-family: &quot;DM Sans&quot;, sans-serif;
-                outline: none;
-              "
-            />
-          </div>
-          <div>
-            <label
-              style="
-                font-size: 12px;
-                font-weight: 600;
-                color: rgba(243, 242, 237, 0.4);
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-                display: block;
-                margin-bottom: 8px;
-              "
-              >What are you looking for?</label
-            >
-            <select
-              style="
-                width: 100%;
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 12px;
-                padding: 12px 16px;
-                font-size: 14px;
-                color: var(--bone);
-                font-family: &quot;DM Sans&quot;, sans-serif;
-                outline: none;
-                cursor: pointer;
-              "
-            >
-              <option style="background: #0a0a0a" value="">
-                Select one...
-              </option>
-              <option style="background: #0a0a0a" value="romantic">
-                Romantic connection
-              </option>
-              <option style="background: #0a0a0a" value="friendship">
-                Genuine friendship
-              </option>
-              <option style="background: #0a0a0a" value="both">
-                Open to both
-              </option>
-              <option style="background: #0a0a0a" value="networking">
-                Professional networking
-              </option>
-            </select>
-          </div>
-          <div>
-            <label
-              style="
-                font-size: 12px;
-                font-weight: 600;
-                color: rgba(243, 242, 237, 0.4);
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-                display: block;
-                margin-bottom: 8px;
-              "
-              >Phone</label
-            >
-            <input
-              type="number"
-              placeholder="0000000000"
-              min="7000000000"
-              max="9999999999"
-              style="
-                width: 100%;
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 12px;
-                padding: 12px 16px;
-                font-size: 14px;
-                color: var(--bone);
-                font-family: &quot;DM Sans&quot;, sans-serif;
-                outline: none;
-              "
-            />
-          </div>
-          <button
-            id="apply-submit-btn"
-            class="btn-vibe"
-            style="width: 100%; margin-top: 8px; border-radius: 14px"
-          >
-            Submit application →
-          </button>
-          <p
-            style="
-              font-size: 12px;
-              color: rgba(243, 242, 237, 0.25);
-              text-align: center;
-              line-height: 1.5;
-            "
-          >
-            By applying you agree to our community guidelines. We require ID
-            verification upon approval.
-          </p>
-        </div>
+        </form>
 
         <!-- OTP CONTAINER (FLEX) -->
         <div
@@ -3414,11 +3753,68 @@
 
       // Apply button submit feedback and transition to OTP
       const applyBtn = document.getElementById("apply-submit-btn");
-      if (applyBtn) {
-        applyBtn.addEventListener("click", () => {
-          applyBtn.textContent = "✓ Application submitted!";
-          applyBtn.style.background = "#16a34a";
-          setTimeout(() => {
+      const applicantForm = document.getElementById("applicant-form");
+
+      if (applicantForm) {
+        applicantForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+
+          if (!applyBtn) return;
+
+          const firstName = document.getElementById("first-name")?.value.trim();
+          const lastName = document.getElementById("last-name")?.value.trim();
+          const email = document.getElementById("email")?.value.trim();
+          const phone = document.getElementById("phone")?.value.trim();
+          const age = document.getElementById("age")?.value.trim();
+          const intent = document.getElementById("intent")?.value.trim();
+
+          if (!firstName || !lastName || !email || !phone || !age || !intent) {
+            window.alert("Please complete all fields before submitting.");
+            return;
+          }
+
+          const ageValue = parseInt(age, 10);
+          const phoneDigits = phone.replace(/\D/g, "");
+
+          if (Number.isNaN(ageValue) || ageValue < 18 || ageValue > 99) {
+            window.alert("Please enter a valid age between 18 and 99.");
+            return;
+          }
+
+          if (phoneDigits.length < 10) {
+            window.alert("Please enter a valid phone number.");
+            return;
+          }
+
+          applyBtn.disabled = true;
+          applyBtn.textContent = "Submitting...";
+          applyBtn.style.opacity = "0.9";
+
+          try {
+            const { data, error } = await window.supabaseClient
+              .from("applicants")
+              .insert([
+                {
+                  first_name: firstName,
+                  last_name: lastName,
+                  email: email,
+                  phone: phoneDigits,
+                  age: ageValue,
+                  intent: intent,
+                },
+              ])
+              .select();
+
+            if (error) {
+              throw error;
+            }
+
+            const applicantId = data && data[0] && data[0].id;
+            if (applicantId !== undefined && applicantId !== null) {
+              sessionStorage.setItem("applicant_id", String(applicantId));
+            }
+            sessionStorage.setItem("applicant_phone", phoneDigits);
+
             const formContainer = document.getElementById(
               "apply-form-container",
             );
@@ -3432,19 +3828,75 @@
             if (modalSubtitle)
               modalSubtitle.textContent =
                 "Please enter the 6-digit OTP code sent to your phone to complete your login.";
-          }, 1000);
+
+            applyBtn.textContent = "✓ Application submitted!";
+            applyBtn.style.background = "#16a34a";
+            applyBtn.disabled = false;
+            applyBtn.style.opacity = "1";
+          } catch (error) {
+            console.error("Applicant submission failed:", error);
+            applyBtn.disabled = false;
+            applyBtn.textContent = "Submit application →";
+            applyBtn.style.background = "";
+            applyBtn.style.opacity = "1";
+            window.alert("Submission failed. Please try again.");
+          }
         });
       }
 
       // OTP submit feedback
       const otpBtn = document.getElementById("otp-submit-btn");
+      const otpInput = document.getElementById("otp-input");
       if (otpBtn) {
-        otpBtn.addEventListener("click", () => {
-          otpBtn.textContent = "✓ Logged in!";
-          otpBtn.style.background = "#16a34a";
-          setTimeout(() => {
-            closeApplyModal();
-          }, 1500);
+        otpBtn.addEventListener("click", async () => {
+          const code = otpInput ? otpInput.value.trim() : "";
+
+          if (!/^\d{6}$/.test(code)) {
+            if (otpInput) {
+              otpInput.focus();
+            }
+            window.alert("Please enter the 6-digit code.");
+            return;
+          }
+
+          sessionStorage.setItem("applicant_verified", "true");
+
+          try {
+            const applicantId = sessionStorage.getItem("applicant_id");
+            if (applicantId) {
+              const { error } = await window.supabaseClient
+                .from("applicants")
+                .update({ status: "verified" })
+                .eq("id", applicantId);
+
+              if (error) {
+                console.error("Applicant verification update failed:", error);
+              }
+            }
+
+            otpBtn.textContent =
+              "✓ Phone Verified! Taking you to the vibe check...";
+            otpBtn.style.background = "#16a34a";
+            otpBtn.disabled = true;
+
+            if (otpInput) {
+              otpInput.value = code;
+            }
+
+            setTimeout(() => {
+              const quizUrl = new URL("cirql-mcq.html", window.location.href);
+              const applicantId = sessionStorage.getItem("applicant_id");
+              if (applicantId) {
+                quizUrl.searchParams.set("applicant_id", applicantId);
+              }
+              window.location.href = quizUrl.toString();
+            }, 1200);
+          } catch (error) {
+            console.error("OTP verification failed:", error);
+            otpBtn.textContent = "Submit OTP →";
+            otpBtn.style.background = "";
+            window.alert("Verification failed. Please try again.");
+          }
         });
       }
     </script>
