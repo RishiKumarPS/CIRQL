@@ -35,13 +35,13 @@ html.page-index *::after {
 }
 html.page-index {
   scroll-behavior: smooth;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 html.page-index body {
   background: var(--midnight);
   color: var(--bone);
   font-family: "DM Sans", sans-serif;
-  overflow-x: hidden;
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
 }
 html.page-index ::selection {
