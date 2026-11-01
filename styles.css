@@ -1040,8 +1040,11 @@ html.page-index #matches .header-wrap {
   max-width: 1200px;
   margin: 0 auto 60px;
 }
-html.page-index .page-index-marquee-track {
+html.page-index .marquee-track {
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  width: max-content;
   gap: 20px;
   animation: page-index-marquee 35s linear infinite;
   will-change: transform;
@@ -1057,8 +1060,9 @@ html.page-index .page-index-marquee-track {
   }
 }
 html.page-index .match-card {
-  flex-shrink: 0;
-  width: 240px;
+  flex: 0 0 320px;
+  min-width: 280px;
+  width: 320px;
   background: #f0efea;
   padding: 12px 12px 24px;
   border-radius: 4px;
