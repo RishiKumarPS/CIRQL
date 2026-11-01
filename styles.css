@@ -1438,6 +1438,63 @@ html.page-index .delay-4 {
   }
 }
 
+@media (max-width: 767px) {
+  html.page-index nav {
+    height: auto;
+    min-height: 72px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 10px 16px;
+  }
+  html.page-index .nav-logo {
+    font-size: 20px;
+  }
+  html.page-index .nav-links {
+    order: 3;
+    display: flex;
+    flex: 0 0 100%;
+    justify-content: space-between;
+    gap: clamp(8px, 2.5vw, 18px);
+    padding-bottom: 2px;
+  }
+  html.page-index .nav-links a {
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  html.page-index .nav-actions {
+    gap: 4px;
+  }
+  html.page-index .nav-actions .btn-ghost {
+    padding: 8px 6px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  html.page-index .nav-actions .btn-primary {
+    padding: 10px 12px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  html.page-index .trust-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 12px;
+    padding: 24px 16px;
+  }
+  html.page-index .trust-divider {
+    display: none;
+  }
+  html.page-index .trust-item {
+    min-width: 0;
+  }
+  html.page-index .trust-num {
+    font-size: 24px;
+  }
+  html.page-index .trust-label {
+    line-height: 1.4;
+    text-align: center;
+  }
+}
+
 html.page-index .u-inline-42b305baf3 {
   position: relative;
   z-index: 1;
