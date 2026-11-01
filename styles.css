@@ -1460,6 +1460,7 @@ html.page-index .u-inline-5790ffba29 {
 html.page-index .u-inline-209eced5f4 {
   display: flex;
   overflow-x: hidden;
+  overflow-y: hidden;
 }
 html.page-index .u-inline-5ddac46f1c {
   background: #0a0a0a;
