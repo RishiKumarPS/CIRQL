@@ -1,0 +1,1144 @@
+import { supabase } from "./supabase-client.js";
+import { setButtonLoading } from "./ui-utils.js";
+
+const ADMIN_PASSCODE = "cirql2026";
+const STATUSES = [
+  "submitted",
+  "verified",
+  "approved",
+  "waitlisted",
+  "rejected",
+];
+const applicantRows = document.getElementById("applicantRows");
+const eventRows = document.getElementById("eventRows");
+const feedback = document.getElementById("dashboardFeedback");
+const eventsFeedback = document.getElementById("eventsFeedback");
+const gate = document.getElementById("passcodeGate");
+const dashboard = document.getElementById("dashboard");
+const connectionState = document.getElementById("connectionState");
+const connectionText = document.getElementById("connectionText");
+const applicants = [];
+const events = [];
+const eventApplications = [];
+const matches = [];
+const RSVP_STATUSES = ["requested", "approved", "waitlisted", "rejected"];
+let quizByApplicant = new Map();
+let matchByApplicant = new Map();
+const totalQuizQuestions = 10;
+let activeMatchApplicant = null;
+let activeMatchEventId = null;
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[character],
+  );
+}
+
+function setFeedback(node, message, kind = "") {
+  node.textContent = message;
+  node.className = `feedback${kind ? ` ${kind}` : ""}`;
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function buildLatestMap(rows) {
+  const latest = new Map();
+  [...rows]
+    .sort(
+      (left, right) =>
+        new Date(right.created_at || 0) - new Date(left.created_at || 0),
+    )
+    .forEach((row) => {
+      if (row.applicant_id && !latest.has(row.applicant_id)) {
+        latest.set(row.applicant_id, row);
+      }
+    });
+  return latest;
+}
+
+function getAnswers(applicant, quizMap) {
+  const quiz = quizMap.get(String(applicant.id));
+  let answers = quiz?.answers;
+  if (typeof answers === "string") {
+    try {
+      answers = JSON.parse(answers);
+    } catch {
+      return null;
+    }
+  }
+  return answers && typeof answers === "object" && !Array.isArray(answers)
+    ? answers
+    : null;
+}
+
+function calculateCompatibility(applicantA, applicantB, quizMap) {
+  const answersA = getAnswers(applicantA, quizMap);
+  const answersB = getAnswers(applicantB, quizMap);
+  if (!answersA || !answersB) return null;
+
+  const questions = Array.from(
+    { length: totalQuizQuestions },
+    (_, index) => String(index + 1),
+  );
+  const answerFor = (answers, question) =>
+    answers[question] ??
+    answers[`q${question}`] ??
+    answers[`Q${question}`];
+  const valuesA = questions.map((question) =>
+    answerFor(answersA, question),
+  );
+  const valuesB = questions.map((question) =>
+    answerFor(answersB, question),
+  );
+  if (
+    valuesA.some((answer) => answer == null || answer === "") ||
+    valuesB.some((answer) => answer == null || answer === "")
+  ) {
+    return null;
+  }
+
+  const matchedCount = valuesA.reduce(
+    (count, answer, index) => count + (answer === valuesB[index] ? 1 : 0),
+    0,
+  );
+  const intentA = String(
+    applicantA.looking_for || applicantA.intent || "",
+  )
+    .trim()
+    .toLowerCase();
+  const intentB = String(
+    applicantB.looking_for || applicantB.intent || "",
+  )
+    .trim()
+    .toLowerCase();
+  const intentBonus = intentA && intentA === intentB ? 2.4 : 0;
+  const score = Math.min(
+    99.4,
+    65 + (matchedCount / totalQuizQuestions) * 32 + intentBonus,
+  );
+
+  return {
+    score: Number(score.toFixed(1)),
+    matchedCount,
+    totalQuestions: totalQuizQuestions,
+    ratio: `${matchedCount}/${totalQuizQuestions}`,
+    intentBonus,
+  };
+}
+
+function applicantName(applicant) {
+  return (
+    `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() ||
+    "Unnamed applicant"
+  );
+}
+
+function compatibilityCandidates(applicant, eventId, includeAllEvents) {
+  return applicants
+    .filter((candidate) => {
+      if (String(candidate.id) === String(applicant.id)) return false;
+      const candidateApplications = applicationsForApplicant(
+        candidate.id,
+      );
+      return includeAllEvents
+        ? candidateApplications.length > 0
+        : candidateApplications.some(
+            (application) =>
+              String(application.event_id) === String(eventId),
+          );
+    })
+    .map((candidate) => ({
+      applicant: candidate,
+      compatibility: calculateCompatibility(
+        applicant,
+        candidate,
+        quizByApplicant,
+      ),
+    }))
+    .filter((candidate) => candidate.compatibility)
+    .sort(
+      (left, right) =>
+        right.compatibility.score - left.compatibility.score ||
+        right.compatibility.matchedCount -
+          left.compatibility.matchedCount ||
+        applicantName(left.applicant).localeCompare(
+          applicantName(right.applicant),
+        ),
+    );
+}
+
+function renderSuggestions(applicant, eventId) {
+  const includeAllEvents =
+    document.getElementById("includeAllEvents").checked;
+  const candidates = compatibilityCandidates(
+    applicant,
+    eventId,
+    includeAllEvents,
+  );
+  const list = document.getElementById("suggestedMatches");
+  const empty = document.getElementById("suggestionEmpty");
+  list.innerHTML = candidates
+    .map(
+      ({ applicant: candidate, compatibility }) => `
+      <button class="suggestion-button" type="button" data-candidate-id="${escapeHtml(candidate.id)}">
+        <span class="suggestion-name">${escapeHtml(applicantName(candidate))}</span>
+        <span class="suggestion-score">${compatibility.score.toFixed(1)}% (${compatibility.ratio} shared answers)</span>
+      </button>`,
+    )
+    .join("");
+  empty.textContent = includeAllEvents
+    ? "No other quiz-completed members have an event RSVP."
+    : "No quiz-completed members have an RSVP for this event.";
+  empty.hidden = candidates.length > 0;
+}
+
+function calculateBestPairs() {
+  const completedApplicants = applicants.filter((applicant) =>
+    getAnswers(applicant, quizByApplicant),
+  );
+  const pairs = [];
+  for (let left = 0; left < completedApplicants.length; left += 1) {
+    for (
+      let right = left + 1;
+      right < completedApplicants.length;
+      right += 1
+    ) {
+      const applicantA = completedApplicants[left];
+      const applicantB = completedApplicants[right];
+      const compatibility = calculateCompatibility(
+        applicantA,
+        applicantB,
+        quizByApplicant,
+      );
+      if (compatibility)
+        pairs.push({ applicantA, applicantB, compatibility });
+    }
+  }
+  return pairs.sort(
+    (left, right) =>
+      right.compatibility.score - left.compatibility.score ||
+      right.compatibility.matchedCount - left.compatibility.matchedCount,
+  );
+}
+
+function showBestPairs() {
+  const pairs = calculateBestPairs();
+  const rows = document.getElementById("bestPairsRows");
+  const empty = document.getElementById("bestPairsEmpty");
+  rows.innerHTML = pairs
+    .slice(0, 50)
+    .map(
+      ({ applicantA, applicantB, compatibility }) => `
+      <tr>
+        <td>${escapeHtml(applicantName(applicantA))}</td>
+        <td>${escapeHtml(applicantName(applicantB))}</td>
+        <td>${compatibility.score.toFixed(1)}%</td>
+        <td>${compatibility.ratio}</td>
+      </tr>`,
+    )
+    .join("");
+  empty.hidden = pairs.length > 0;
+  document.getElementById("pairPreviewDialog").showModal();
+}
+
+function renderEventFilter() {
+  const filter = document.getElementById("eventFilter");
+  const selected = filter.value;
+  filter.innerHTML =
+    '<option value="">All Events</option>' +
+    events
+      .map(
+        (event) =>
+          `<option value="${escapeHtml(event.id)}">${escapeHtml(event.title || "Untitled event")}</option>`,
+      )
+      .join("");
+  if (events.some((event) => String(event.id) === selected)) {
+    filter.value = selected;
+  }
+}
+
+function applicationsForApplicant(applicantId) {
+  return eventApplications.filter(
+    (application) =>
+      String(application.applicant_id) === String(applicantId),
+  );
+}
+
+function renderSummary(quizRows, matchRows) {
+  document.getElementById("totalApplicants").textContent =
+    applicants.length;
+  document.getElementById("quizCompletedCount").textContent =
+    quizByApplicant.size;
+  document.getElementById("activeRsvpsCount").textContent =
+    eventApplications.filter((row) => row.status !== "rejected").length;
+  document.getElementById("matchesAssignedCount").textContent =
+    matchRows.length;
+}
+
+function renderApplicants() {
+  const search = document
+    .getElementById("applicantSearch")
+    .value.trim()
+    .toLowerCase();
+  const selectedEventId = document.getElementById("eventFilter").value;
+  const statusFilter = document.getElementById("rsvpStatusFilter").value;
+  const visible = applicants.filter((applicant) => {
+    const name =
+      `${applicant.first_name || ""} ${applicant.last_name || ""}`.toLowerCase();
+    const contact =
+      `${applicant.email || ""} ${applicant.phone || ""}`.toLowerCase();
+    const allApplications = applicationsForApplicant(applicant.id);
+    const relevantApplications = allApplications.filter(
+      (application) =>
+        (!selectedEventId ||
+          String(application.event_id) === selectedEventId) &&
+        (!statusFilter || application.status === statusFilter),
+    );
+    return (
+      (!search || name.includes(search) || contact.includes(search)) &&
+      ((!selectedEventId && !statusFilter) ||
+        relevantApplications.length > 0)
+    );
+  });
+
+  document.getElementById("emptyState").hidden = visible.length > 0;
+  applicantRows.innerHTML = visible
+    .map((applicant) => {
+      const applicantId = String(applicant.id ?? "");
+      const name =
+        `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() ||
+        "Unnamed applicant";
+      const quiz = quizByApplicant.get(applicantId);
+      const intent = applicant.looking_for || applicant.intent || "—";
+      const relevantApplications = applicationsForApplicant(
+        applicantId,
+      ).filter(
+        (application) =>
+          (!selectedEventId ||
+            String(application.event_id) === selectedEventId) &&
+          (!statusFilter || application.status === statusFilter),
+      );
+      const rsvpEntries = relevantApplications.length
+        ? relevantApplications
+            .map((application) => {
+              const eventItem = events.find(
+                (item) =>
+                  String(item.id) === String(application.event_id),
+              );
+              const eventMatches = matches.filter(
+                (match) =>
+                  String(match.applicant_id) === applicantId &&
+                  String(match.event_id) === String(application.event_id),
+              );
+              const statusOptions = RSVP_STATUSES.map(
+                (status) =>
+                  `<option value="${status}"${application.status === status ? " selected" : ""}>${status[0].toUpperCase()}${status.slice(1)}</option>`,
+              ).join("");
+              const matchDetails = eventMatches.length
+                ? eventMatches
+                    .map((match) => {
+                      const score = Number(match.compatibility_score);
+                      const scoreText = Number.isFinite(score)
+                        ? `${score.toFixed(1)}%`
+                        : "Score pending";
+                      return `<span class="match-cell"><strong>${escapeHtml(match.matched_name || "Match assigned")}</strong><span>${escapeHtml(scoreText)}</span></span>`;
+                    })
+                    .join("")
+                : '<span class="rsvp-event-date">No match assigned</span>';
+              return `<div class="rsvp-entry" data-rsvp-id="${escapeHtml(application.id)}">
+              <span class="rsvp-event-name">${escapeHtml(eventItem?.title || "Event")}${eventItem?.event_date ? `<span class="rsvp-event-date">${escapeHtml(eventItem.event_date)}</span>` : ""}</span>
+              <div class="rsvp-actions">
+                <select class="status-select" data-action="rsvp-status" data-rsvp-id="${escapeHtml(application.id)}" data-event-id="${escapeHtml(application.event_id)}" aria-label="RSVP status for ${escapeHtml(name)}">${statusOptions}</select>
+                <button class="button small" data-action="assign" data-event-id="${escapeHtml(application.event_id)}" type="button">Assign Match</button>
+              </div>
+              ${matchDetails}
+            </div>`;
+            })
+            .join("")
+        : '<span class="rsvp-event-date">No event RSVPs</span>';
+
+      return `<tr data-applicant-id="${escapeHtml(applicantId)}">
+      <td class="name-cell"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(applicant.age ? `${applicant.age} years` : "Age not provided")}</span></td>
+      <td class="contact-cell"><strong>${escapeHtml(applicant.email || "No email")}</strong><span>${escapeHtml(applicant.phone || "No phone")}</span></td>
+      <td>${escapeHtml(intent)}</td>
+      <td><div class="row-actions"><span data-quiz-state="${quiz ? "complete" : "incomplete"}">${quiz ? "Quiz complete" : "Not completed"}</span><button class="button small answer-action" data-action="answers" type="button">View Answers</button></div></td>
+      <td><div class="rsvp-list">${rsvpEntries}</div></td>
+    </tr>`;
+    })
+    .join("");
+
+  if (!visible.length && applicants.length) {
+    document.getElementById("emptyState").textContent =
+      "No applicants match this view.";
+  } else if (!applicants.length) {
+    document.getElementById("emptyState").textContent =
+      "No applicants found.";
+  }
+}
+
+function renderEvents() {
+  const empty = document.getElementById("eventEmpty");
+  empty.hidden = events.length > 0;
+  eventRows.innerHTML = events
+    .map((event) => {
+      const spots = Math.max(0, Number(event.spots_left) || 0);
+      const featured = Boolean(event.featured);
+      return `<tr data-event-id="${escapeHtml(event.id)}">
+        <td class="event-title-cell"><strong>${escapeHtml(event.title || "Untitled event")}</strong><span>${escapeHtml(event.subtitle || "")}</span></td>
+        <td>${escapeHtml(event.event_date || "Date TBA")}</td>
+        <td>${escapeHtml(event.location || "Location TBA")}</td>
+        <td><span class="featured-badge${featured ? "" : " is-standard"}">${featured ? "Featured" : "Standard"}</span></td>
+        <td><div class="event-spots-control"><button class="button small" type="button" data-event-action="decrement" aria-label="Decrease spots for ${escapeHtml(event.title)}">−1</button><input class="field event-spots-input" type="number" min="0" step="1" value="${spots}" aria-label="Spots left for ${escapeHtml(event.title)}" /><button class="button small" type="button" data-event-action="increment" aria-label="Increase spots for ${escapeHtml(event.title)}">+1</button><button class="button small" type="button" data-event-action="save-spots">Save</button></div></td>
+        <td><div class="event-row-actions"><button class="button small" type="button" data-event-action="toggle-featured">${featured ? "Unfeature" : "Feature"}</button><button class="button small" type="button" data-event-action="delete">Delete</button></div></td>
+      </tr>`;
+    })
+    .join("");
+}
+
+async function updateEvent(event, values, successMessage) {
+  try {
+    const { error } = await supabase
+      .from("events")
+      .update(values)
+      .eq("id", event.id);
+    if (error) throw error;
+    Object.assign(event, values);
+    renderEvents();
+    setFeedback(eventsFeedback, successMessage, "success");
+    return true;
+  } catch (error) {
+    setFeedback(
+      eventsFeedback,
+      `Event update failed: ${error.message || error}`,
+      "error",
+    );
+    return false;
+  }
+}
+
+async function featureEvent(targetEvent) {
+  const previousFeatured = events
+    .filter((event) => event.featured)
+    .map((event) => event.id);
+  const { error: clearError } = await supabase
+    .from("events")
+    .update({ featured: false })
+    .neq("id", targetEvent.id);
+  if (clearError) throw clearError;
+
+  events.forEach((event) => {
+    if (String(event.id) !== String(targetEvent.id)) {
+      event.featured = false;
+    }
+  });
+  renderEvents();
+
+  const { error: targetError } = await supabase
+    .from("events")
+    .update({ featured: true })
+    .eq("id", targetEvent.id);
+  if (targetError) {
+    const rollbackErrors = [];
+    for (const previousId of previousFeatured) {
+      const { error } = await supabase
+        .from("events")
+        .update({ featured: true })
+        .eq("id", previousId);
+      if (error) rollbackErrors.push(error.message || String(error));
+    }
+    events.forEach((event) => {
+      event.featured = previousFeatured.some(
+        (id) => String(id) === String(event.id),
+      );
+    });
+    renderEvents();
+    const rollbackMessage = rollbackErrors.length
+      ? ` Featured state rollback failed: ${rollbackErrors.join("; ")}`
+      : "";
+    throw new Error(
+      `${targetError.message || targetError}.${rollbackMessage}`,
+    );
+  }
+
+  targetEvent.featured = true;
+  renderEvents();
+  setFeedback(
+    eventsFeedback,
+    `${targetEvent.title || "Event"} is now the featured event.`,
+    "success",
+  );
+}
+
+async function loadDashboard() {
+  const refreshButton = document.getElementById("refreshButton");
+  setButtonLoading(refreshButton, true);
+  connectionText.textContent = "Loading";
+  connectionState.classList.remove("is-error");
+  setFeedback(feedback, "Loading live records...");
+
+  try {
+    const [
+      applicantResult,
+      quizResult,
+      matchResult,
+      eventResult,
+      eventApplicationResult,
+    ] = await Promise.all([
+      supabase
+        .from("applicants")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase.from("quiz_responses").select("*"),
+      supabase.from("matches").select("*"),
+      supabase
+        .from("events")
+        .select(
+          "id, title, subtitle, event_date, location, spots_left, featured",
+        )
+        .order("featured", { ascending: false })
+        .order("event_date", { ascending: true }),
+      supabase
+        .from("event_applications")
+        .select("id, event_id, applicant_id, status"),
+    ]);
+    const failure =
+      applicantResult.error ||
+      quizResult.error ||
+      matchResult.error ||
+      eventResult.error ||
+      eventApplicationResult.error;
+    if (failure) throw failure;
+
+    applicants.splice(
+      0,
+      applicants.length,
+      ...(applicantResult.data || []),
+    );
+    const quizRows = quizResult.data || [];
+    const matchRows = matchResult.data || [];
+    events.splice(0, events.length, ...(eventResult.data || []));
+    eventApplications.splice(
+      0,
+      eventApplications.length,
+      ...(eventApplicationResult.data || []),
+    );
+    matches.splice(0, matches.length, ...matchRows);
+    quizByApplicant = buildLatestMap(quizRows);
+    matchByApplicant = buildLatestMap(matchRows);
+    renderSummary(quizRows, matchRows);
+    renderApplicants();
+    renderEvents();
+    renderEventFilter();
+    connectionText.textContent = "Live data";
+    setFeedback(
+      feedback,
+      `Updated just now · ${applicants.length} applicants`,
+      "success",
+    );
+  } catch (error) {
+    console.error("Admin dashboard load failed:", error);
+    connectionText.textContent = "Connection error";
+    connectionState.classList.add("is-error");
+    setFeedback(
+      feedback,
+      `Could not load dashboard data: ${error.message || error}`,
+      "error",
+    );
+  } finally {
+    setButtonLoading(refreshButton, false);
+  }
+}
+
+function openAnswers(applicant) {
+  const applicantId = String(applicant.id ?? "");
+  const name =
+    `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() ||
+    "Applicant";
+  const quiz = quizByApplicant.get(applicantId);
+  const list = document.getElementById("answersList");
+  document.getElementById("answersApplicant").textContent = name;
+
+  let answers = quiz?.answers;
+  if (typeof answers === "string") {
+    try {
+      answers = JSON.parse(answers);
+    } catch {
+      answers = null;
+    }
+  }
+
+  const entries =
+    answers && typeof answers === "object"
+      ? Object.entries(answers).sort(
+          ([left], [right]) =>
+            Number(left.replace(/\D/g, "")) -
+            Number(right.replace(/\D/g, "")),
+        )
+      : [];
+
+  if (!entries.length) {
+    list.innerHTML = '<p class="empty-state">Not completed</p>';
+  } else {
+    list.innerHTML = entries
+      .map(([question, answer]) => {
+        const label = question.replace(/^q/i, "");
+        const value = /^[a-d]$/i.test(String(answer))
+          ? `Option ${String(answer).toUpperCase()}`
+          : String(answer);
+        return `<div class="answer-row"><span class="answer-question">Q${escapeHtml(label)}</span><span class="answer-value">${escapeHtml(value)}</span></div>`;
+      })
+      .join("");
+  }
+
+  document.getElementById("answersDialog").showModal();
+}
+
+function localDateTime(date) {
+  const offsetDate = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60000,
+  );
+  return offsetDate.toISOString().slice(0, 16);
+}
+
+function openMatchForm(applicant, eventId = null) {
+  const form = document.getElementById("matchForm");
+  const applicantId = String(applicant.id ?? "");
+  const name =
+    `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() ||
+    "Applicant";
+  form.reset();
+  activeMatchApplicant = applicant;
+  document.getElementById("matchApplicantId").value = applicantId;
+  document.getElementById("selectedCandidateId").value = "";
+  const applicantEventIds = new Set(
+    applicationsForApplicant(applicantId).map((application) =>
+      String(application.event_id),
+    ),
+  );
+  const matchEvents = events.filter((item) =>
+    applicantEventIds.has(String(item.id)),
+  );
+  const eventSelect = document.getElementById("matchEventSelect");
+  eventSelect.innerHTML = matchEvents
+    .map(
+      (item) =>
+        `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title || "Event")}</option>`,
+    )
+    .join("");
+  activeMatchEventId = String(eventId || matchEvents[0]?.id || "");
+  eventSelect.value = activeMatchEventId;
+  document.getElementById("matchEventId").value = activeMatchEventId;
+  document.getElementById("matchApplicant").textContent = `For ${name}`;
+  document.getElementById("matchFeedback").textContent = "";
+  document.getElementById("reciprocalMatch").disabled = true;
+  document.getElementById("revealAt").value = localDateTime(new Date());
+  document.getElementById("otherApplicants").innerHTML = applicants
+    .filter((other) => String(other.id) !== applicantId)
+    .map(
+      (other) =>
+        `<option value="${escapeHtml(`${other.first_name || ""} ${other.last_name || ""}`.trim())}"></option>`,
+    )
+    .join("");
+  document.getElementById("suggestionEmpty").textContent =
+    "No quiz-completed members have an RSVP for this event.";
+  renderSuggestions(applicant, activeMatchEventId);
+  document.getElementById("matchDialog").showModal();
+}
+
+document
+  .getElementById("passcodeForm")
+  .addEventListener("submit", (event) => {
+    event.preventDefault();
+    const input = document.getElementById("adminPasscode");
+    if (input.value !== ADMIN_PASSCODE) {
+      document.getElementById("gateError").textContent =
+        "That passcode did not match.";
+      input.select();
+      return;
+    }
+
+    sessionStorage.setItem("cirql_admin_unlocked", "true");
+    gate.hidden = true;
+    dashboard.hidden = false;
+    document.getElementById("logoutButton").hidden = false;
+    loadDashboard();
+  });
+
+document.getElementById("logoutButton").addEventListener("click", () => {
+  sessionStorage.removeItem("cirql_admin_unlocked");
+  dashboard.hidden = true;
+  gate.hidden = false;
+  document.getElementById("logoutButton").hidden = true;
+  document.getElementById("adminPasscode").value = "";
+  document.getElementById("adminPasscode").focus();
+});
+
+document
+  .getElementById("refreshButton")
+  .addEventListener("click", loadDashboard);
+
+document
+  .getElementById("eventRows")
+  .addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-event-action]");
+    if (!button) return;
+    const row = button.closest("tr[data-event-id]");
+    const record = events.find(
+      (item) => String(item.id) === row?.dataset.eventId,
+    );
+    if (!record) return;
+
+    if (
+      button.dataset.eventAction === "increment" ||
+      button.dataset.eventAction === "decrement"
+    ) {
+      const current = Math.max(0, Number(record.spots_left) || 0);
+      const delta = button.dataset.eventAction === "increment" ? 1 : -1;
+      await updateEvent(
+        record,
+        { spots_left: Math.max(0, current + delta) },
+        "Spots updated.",
+      );
+      return;
+    }
+
+    if (button.dataset.eventAction === "save-spots") {
+      const input = row.querySelector(".event-spots-input");
+      const value = Number(input.value);
+      if (input.value.trim() === "" || !Number.isInteger(value)) {
+        setFeedback(
+          eventsFeedback,
+          "Enter a whole number of spots.",
+          "error",
+        );
+        return;
+      }
+      await updateEvent(
+        record,
+        { spots_left: Math.max(0, value) },
+        "Spots updated.",
+      );
+      return;
+    }
+
+    if (button.dataset.eventAction === "toggle-featured") {
+      if (record.featured) {
+        await updateEvent(
+          record,
+          { featured: false },
+          "Featured event cleared.",
+        );
+      } else {
+        try {
+          await featureEvent(record);
+        } catch (error) {
+          setFeedback(
+            eventsFeedback,
+            `Featured event update failed: ${error.message || error}`,
+            "error",
+          );
+        }
+      }
+      return;
+    }
+
+    if (button.dataset.eventAction === "delete") {
+      if (
+        !window.confirm(
+          `Delete “${record.title || "this event"}”? This cannot be undone.`,
+        )
+      )
+        return;
+      try {
+        const { error } = await supabase
+          .from("events")
+          .delete()
+          .eq("id", record.id);
+        if (error) throw error;
+        events.splice(events.indexOf(record), 1);
+        renderEvents();
+        setFeedback(eventsFeedback, "Event deleted.", "success");
+      } catch (error) {
+        setFeedback(
+          eventsFeedback,
+          `Event deletion failed: ${error.message || error}`,
+          "error",
+        );
+      }
+    }
+  });
+
+document
+  .getElementById("newEventButton")
+  .addEventListener("click", () => {
+    const form = document.getElementById("eventForm");
+    form.reset();
+    document.getElementById("eventFormFeedback").textContent = "";
+    document.getElementById("eventDialog").showModal();
+  });
+
+document
+  .getElementById("eventForm")
+  .addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = document.getElementById("createEventSubmit");
+    const feedbackNode = document.getElementById("eventFormFeedback");
+    const spots = Number(document.getElementById("newEventSpots").value);
+    if (!Number.isInteger(spots) || spots < 0) {
+      setFeedback(
+        feedbackNode,
+        "Spots left must be a whole number, zero or greater.",
+        "error",
+      );
+      return;
+    }
+
+    const wantsFeatured =
+      document.getElementById("newEventFeatured").checked;
+    const record = {
+      title: document.getElementById("newEventTitle").value.trim(),
+      subtitle: document.getElementById("newEventSubtitle").value.trim(),
+      event_date: document.getElementById("newEventDate").value.trim(),
+      location: document.getElementById("newEventLocation").value.trim(),
+      spots_left: spots,
+      featured: false,
+    };
+    setButtonLoading(button, true, "Creating...");
+    try {
+      const { data, error } = await supabase
+        .from("events")
+        .insert([record])
+        .select(
+          "id, title, subtitle, event_date, location, spots_left, featured",
+        )
+        .single();
+      if (error) throw error;
+      events.push(data);
+      if (wantsFeatured) {
+        try {
+          await featureEvent(data);
+        } catch (featureError) {
+          setFeedback(
+            eventsFeedback,
+            `Event created, but could not set it as featured: ${featureError.message || featureError}`,
+            "error",
+          );
+        }
+      }
+      document.getElementById("eventDialog").close();
+      form.reset();
+      if (!wantsFeatured) {
+        setFeedback(eventsFeedback, "Event created.", "success");
+      }
+      await loadDashboard();
+    } catch (error) {
+      setFeedback(
+        feedbackNode,
+        `Event creation failed: ${error.message || error}`,
+        "error",
+      );
+    } finally {
+      setButtonLoading(button, false);
+    }
+  });
+
+document
+  .getElementById("previewBestPairs")
+  .addEventListener("click", showBestPairs);
+document
+  .getElementById("applicantSearch")
+  .addEventListener("input", renderApplicants);
+document
+  .getElementById("rsvpStatusFilter")
+  .addEventListener("change", renderApplicants);
+document
+  .getElementById("eventFilter")
+  .addEventListener("change", renderApplicants);
+
+document
+  .getElementById("matchEventSelect")
+  .addEventListener("change", (event) => {
+    activeMatchEventId = event.target.value;
+    document.getElementById("matchEventId").value = activeMatchEventId;
+    if (activeMatchApplicant) {
+      renderSuggestions(activeMatchApplicant, activeMatchEventId);
+    }
+  });
+
+document
+  .getElementById("includeAllEvents")
+  .addEventListener("change", () => {
+    if (activeMatchApplicant) {
+      renderSuggestions(activeMatchApplicant, activeMatchEventId);
+    }
+  });
+
+document
+  .getElementById("suggestedMatches")
+  .addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-candidate-id]");
+    if (!button) return;
+    const applicantId = document.getElementById("matchApplicantId").value;
+    const applicant = applicants.find(
+      (item) => String(item.id) === applicantId,
+    );
+    const candidate = applicants.find(
+      (item) => String(item.id) === button.dataset.candidateId,
+    );
+    if (!applicant || !candidate) return;
+    const compatibility = calculateCompatibility(
+      applicant,
+      candidate,
+      quizByApplicant,
+    );
+    if (!compatibility) return;
+
+    document.getElementById("matchedName").value =
+      applicantName(candidate);
+    document.getElementById("compatibilityScore").value =
+      compatibility.score.toFixed(1);
+    document.getElementById("selectedCandidateId").value = candidate.id;
+    document.getElementById("reciprocalMatch").disabled = false;
+    document
+      .querySelectorAll(".suggestion-button")
+      .forEach((suggestion) =>
+        suggestion.setAttribute(
+          "aria-pressed",
+          String(suggestion === button),
+        ),
+      );
+  });
+
+document.getElementById("matchedName").addEventListener("input", () => {
+  const selectedCandidateId = document.getElementById(
+    "selectedCandidateId",
+  );
+  const reciprocal = document.getElementById("reciprocalMatch");
+  if (!selectedCandidateId.value) return;
+  selectedCandidateId.value = "";
+  reciprocal.checked = false;
+  reciprocal.disabled = true;
+  document
+    .querySelectorAll(".suggestion-button")
+    .forEach((button) => button.setAttribute("aria-pressed", "false"));
+});
+
+applicantRows.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const row = button.closest("tr[data-applicant-id]");
+  const applicant = applicants.find(
+    (item) => String(item.id) === row?.dataset.applicantId,
+  );
+  if (!applicant) return;
+  if (button.dataset.action === "answers") openAnswers(applicant);
+  if (button.dataset.action === "assign") {
+    openMatchForm(applicant, button.dataset.eventId);
+  }
+});
+
+applicantRows.addEventListener("change", async (event) => {
+  const select = event.target.closest(
+    'select[data-action="rsvp-status"]',
+  );
+  if (!select) return;
+  const application = eventApplications.find(
+    (item) => String(item.id) === select.dataset.rsvpId,
+  );
+  if (!application) return;
+  const prevStatus = application.status || "requested";
+  const nextStatus = select.value;
+  const eventItem = events.find(
+    (item) => String(item.id) === String(application.event_id),
+  );
+  let previousSpots = null;
+  let spotsUpdated = false;
+  select.disabled = true;
+  try {
+    const approvalTransition =
+      (prevStatus !== "approved" && nextStatus === "approved") ||
+      (prevStatus === "approved" && nextStatus !== "approved");
+
+    if (approvalTransition && eventItem) {
+      previousSpots = Math.max(0, Number(eventItem.spots_left || 0));
+      const newSpots =
+        nextStatus === "approved"
+          ? Math.max(0, previousSpots - 1)
+          : previousSpots + 1;
+      const { error: eventError } = await supabase
+        .from("events")
+        .update({ spots_left: newSpots })
+        .eq("id", eventItem.id);
+      if (eventError) throw eventError;
+      eventItem.spots_left = newSpots;
+      spotsUpdated = true;
+      renderEvents();
+    }
+
+    const { error } = await supabase
+      .from("event_applications")
+      .update({ status: nextStatus })
+      .eq("id", application.id);
+    if (error) throw error;
+    application.status = nextStatus;
+    renderApplicants();
+    renderSummary([], matches);
+    if (spotsUpdated) {
+      const verb = nextStatus === "approved" ? "approved" : "updated";
+      setFeedback(
+        feedback,
+        `RSVP ${verb} — ${eventItem.title || "Event"} spots_left updated to ${eventItem.spots_left}.`,
+        "success",
+      );
+    } else {
+      setFeedback(feedback, "RSVP status updated.", "success");
+    }
+  } catch (error) {
+    let rollbackMessage = "";
+    if (spotsUpdated && eventItem) {
+      const { error: rollbackError } = await supabase
+        .from("events")
+        .update({ spots_left: previousSpots })
+        .eq("id", eventItem.id);
+      if (rollbackError) {
+        rollbackMessage = ` Event spot rollback failed: ${rollbackError.message || rollbackError}`;
+      } else {
+        eventItem.spots_left = previousSpots;
+        renderEvents();
+      }
+    }
+    select.value = prevStatus;
+    setFeedback(
+      feedback,
+      `RSVP status update failed: ${error.message || error}.${rollbackMessage}`,
+      "error",
+    );
+  } finally {
+    select.disabled = false;
+  }
+});
+
+document.querySelectorAll("[data-close]").forEach((button) => {
+  button.addEventListener("click", () =>
+    document.getElementById(button.dataset.close).close(),
+  );
+});
+
+document
+  .getElementById("revealImmediately")
+  .addEventListener("click", () => {
+    document.getElementById("revealAt").value = localDateTime(new Date());
+  });
+
+document.getElementById("revealTonight").addEventListener("click", () => {
+  const midnight = new Date();
+  midnight.setHours(24, 0, 0, 0);
+  document.getElementById("revealAt").value = localDateTime(midnight);
+});
+
+document
+  .getElementById("matchForm")
+  .addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = document.getElementById("saveMatchButton");
+    const feedbackNode = document.getElementById("matchFeedback");
+    const score = Number(
+      document.getElementById("compatibilityScore").value,
+    );
+    const revealValue = document.getElementById("revealAt").value;
+    const revealAt = new Date(revealValue);
+    if (
+      !Number.isFinite(score) ||
+      score < 0 ||
+      score > 100 ||
+      Number.isNaN(revealAt.getTime())
+    ) {
+      setFeedback(
+        feedbackNode,
+        "Enter a valid score and reveal time.",
+        "error",
+      );
+      return;
+    }
+
+    const applicantId = document.getElementById("matchApplicantId").value;
+    const eventId = document.getElementById("matchEventId").value;
+    const candidateId = document.getElementById(
+      "selectedCandidateId",
+    ).value;
+    const applicant = applicants.find(
+      (item) => String(item.id) === applicantId,
+    );
+    const candidate = applicants.find(
+      (item) => String(item.id) === candidateId,
+    );
+    const records = [
+      {
+        applicant_id: applicantId,
+        event_id: eventId,
+        matched_name: document.getElementById("matchedName").value.trim(),
+        compatibility_score: score,
+        reveal_at: revealAt.toISOString(),
+      },
+    ];
+    if (document.getElementById("reciprocalMatch").checked) {
+      if (!applicant || !candidate) {
+        setFeedback(
+          feedbackNode,
+          "Select a suggested applicant before creating a reciprocal match.",
+          "error",
+        );
+        return;
+      }
+      records.push({
+        applicant_id: candidateId,
+        event_id: eventId,
+        matched_name: applicantName(applicant),
+        compatibility_score: score,
+        reveal_at: revealAt.toISOString(),
+      });
+    }
+
+    setButtonLoading(button, true, "Saving...");
+    try {
+      const { error } = await supabase
+        .from("matches")
+        .insert(records);
+      if (error) throw error;
+      document.getElementById("matchDialog").close();
+      setFeedback(feedback, "Match assigned successfully.", "success");
+      await loadDashboard();
+    } catch (error) {
+      setFeedback(
+        feedbackNode,
+        `Match assignment failed: ${error.message || error}`,
+        "error",
+      );
+    } finally {
+      setButtonLoading(button, false);
+    }
+  });
+
+if (sessionStorage.getItem("cirql_admin_unlocked") === "true") {
+  gate.hidden = true;
+  dashboard.hidden = false;
+  document.getElementById("logoutButton").hidden = false;
+  loadDashboard();
+}

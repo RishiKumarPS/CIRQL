@@ -10,6 +10,10 @@ CIRQL is a static website for a curated, in-person social and dating experience 
 - `404.html` — branded not-found page.
 - `styles.css` — shared visual styles for the site.
 - `supabase-client.js` — shared ES module that creates and exports the Supabase client and shared formatting/normalization helpers.
+- `ui-utils.js` — shared toast, member-session storage, and button-loading helpers.
+- `landing.js` — landing page event, member, modal, and match behavior.
+- `quiz.js` — quiz draft, answer, and submission behavior.
+- `admin.js` — admin dashboard data and interaction behavior.
 
 ## Demo limitations and data safety
 
@@ -28,4 +32,4 @@ Use demo data only until production access controls and policies have been verif
 
 ## Run and deploy
 
-There is no build step or package installation. Serve the project root with a static web server; for example, run `python -m http.server 8000` and open `http://localhost:8000`. Deploy the active HTML pages, `styles.css`, and `supabase-client.js`. Google Fonts are loaded remotely and require an internet connection.
+There is no build step or package installation. Serve the project root with a static web server; for example, run `python -m http.server 8000` and open `http://localhost:8000`. Deploy the HTML pages, `styles.css`, `supabase-client.js`, `ui-utils.js`, `landing.js`, `quiz.js`, and `admin.js`. Google Fonts are loaded remotely and require an internet connection.
