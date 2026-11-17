@@ -44,7 +44,7 @@
         <div class="gate-mark"></div>
         <p class="eyebrow">CIRQL operations</p>
         <h1>Applicant desk</h1>
-        <p class="gate-copy">
+        <p class="gate-copy" id="gate-copy">
           Enter the admin passcode to open the live applicant dashboard.
         </p>
         <label for="adminPasscode">Admin passcode</label>
@@ -53,6 +53,7 @@
           id="adminPasscode"
           type="password"
           autocomplete="current-password"
+          aria-describedby="gate-copy gateError"
           required
           autofocus
         />

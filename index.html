@@ -38,7 +38,7 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
 
-  <body class="page-index">
+  <body id="top" class="page-index">
     <div
       id="app-toast"
       class="app-toast"
@@ -48,7 +48,7 @@
     ></div>
     <!-- NAV -->
     <nav>
-      <a href="#" class="nav-logo">CIRQL</a>
+      <a href="#top" class="nav-logo">CIRQL</a>
       <ul class="nav-links">
         <li><a href="#events">Events</a></li>
         <li><a href="#how">How it Works</a></li>
@@ -1370,33 +1370,33 @@
           <div class="footer-col">
             <h5>Events</h5>
             <ul>
-              <li><a href="#">Upcoming events</a></li>
-              <li><a href="#">Past events</a></li>
-              <li><a href="#">Host an event</a></li>
+              <li><a href="#events">Upcoming events</a></li>
+              <li><a href="#" data-coming-soon>Past events</a></li>
+              <li><a href="#" data-coming-soon>Host an event</a></li>
             </ul>
           </div>
           <div class="footer-col">
             <h5>Company</h5>
             <ul>
-              <li><a href="#">About</a></li>
-              <li><a href="#">Safety</a></li>
-              <li><a href="#">Blog</a></li>
-              <li><a href="#">Careers</a></li>
+              <li><a href="#" data-coming-soon>About</a></li>
+              <li><a href="#safety">Safety</a></li>
+              <li><a href="#" data-coming-soon>Blog</a></li>
+              <li><a href="#" data-coming-soon>Careers</a></li>
             </ul>
           </div>
           <div class="footer-col">
             <h5>Legal</h5>
             <ul>
-              <li><a href="#">Privacy Policy</a></li>
-              <li><a href="#">Terms of Use</a></li>
-              <li><a href="#">Community Guidelines</a></li>
+              <li><a href="#" data-coming-soon>Privacy Policy</a></li>
+              <li><a href="#" data-coming-soon>Terms of Use</a></li>
+              <li><a href="#" data-coming-soon>Community Guidelines</a></li>
             </ul>
           </div>
           <div class="footer-col">
             <h5>Social</h5>
             <ul>
-              <li><a href="#">Instagram</a></li>
-              <li><a href="#">LinkedIn</a></li>
+              <li><a href="#" data-coming-soon>Instagram</a></li>
+              <li><a href="#" data-coming-soon>LinkedIn</a></li>
             </ul>
           </div>
         </div>
@@ -2100,9 +2100,17 @@
     <div
       id="apply-modal"
       class="apply-modal u-inline-270ab5e0e1"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      aria-describedby="modal-subtitle"
     >
       <div class="u-inline-1fd218cedd">
-        <button onclick="closeApplyModal()" class="u-inline-c3dbf40999">
+        <button
+          onclick="closeApplyModal()"
+          class="u-inline-c3dbf40999"
+          aria-label="Close member access dialog"
+        >
           ×
         </button>
 
@@ -2134,7 +2142,9 @@
           <div id="apply-form-container" class="u-inline-89dbb6c292">
             <div class="u-inline-0fe0e95ca8">
               <div>
-                <label class="u-inline-32d3a6979d">First name</label>
+                <label for="first-name" class="u-inline-32d3a6979d"
+                  >First name</label
+                >
                 <input
                   id="first-name"
                   type="text"
@@ -2143,7 +2153,9 @@
                 />
               </div>
               <div>
-                <label class="u-inline-32d3a6979d">Last name</label>
+                <label for="last-name" class="u-inline-32d3a6979d"
+                  >Last name</label
+                >
                 <input
                   id="last-name"
                   type="text"
@@ -2153,7 +2165,7 @@
               </div>
             </div>
             <div>
-              <label class="u-inline-32d3a6979d">Email</label>
+              <label for="email" class="u-inline-32d3a6979d">Email</label>
               <input
                 id="email"
                 type="email"
@@ -2162,7 +2174,7 @@
               />
             </div>
             <div>
-              <label class="u-inline-32d3a6979d">Age</label>
+              <label for="age" class="u-inline-32d3a6979d">Age</label>
               <input
                 id="age"
                 type="number"
@@ -2173,7 +2185,7 @@
               />
             </div>
             <div>
-              <label class="u-inline-32d3a6979d"
+              <label for="intent" class="u-inline-32d3a6979d"
                 >What are you looking for?</label
               >
               <select id="intent" class="u-inline-11f74c5e7b">
@@ -2195,7 +2207,7 @@
               </select>
             </div>
             <div>
-              <label class="u-inline-32d3a6979d">Phone</label>
+              <label for="phone" class="u-inline-32d3a6979d">Phone</label>
               <input
                 id="phone"
                 type="tel"
@@ -2256,7 +2268,7 @@
         <!-- OTP CONTAINER (FLEX) -->
         <div id="otp-container" hidden class="u-inline-a44ac36ac1">
           <div>
-            <label class="u-inline-32d3a6979d">Enter OTP</label>
+            <label for="otp-input" class="u-inline-32d3a6979d">Enter OTP</label>
             <input
               type="text"
               id="otp-input"
@@ -2475,6 +2487,13 @@
           }
           requestEventApplication(featuredEventRecord.id);
         });
+
+      document.addEventListener("click", (event) => {
+        const link = event.target.closest("a[data-coming-soon]");
+        if (!link) return;
+        event.preventDefault();
+        showToast("Coming soon for public launch");
+      });
 
       document.getElementById("member-logout").addEventListener("click", () => {
         clearMemberSession();
