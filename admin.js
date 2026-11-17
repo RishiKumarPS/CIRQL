@@ -23,7 +23,6 @@ const eventApplications = [];
 const matches = [];
 const RSVP_STATUSES = ["requested", "approved", "waitlisted", "rejected"];
 let quizByApplicant = new Map();
-let matchByApplicant = new Map();
 const totalQuizQuestions = 10;
 let activeMatchApplicant = null;
 let activeMatchEventId = null;
@@ -45,16 +44,6 @@ function escapeHtml(value) {
 function setFeedback(node, message, kind = "") {
   node.textContent = message;
   node.className = `feedback${kind ? ` ${kind}` : ""}`;
-}
-
-function formatDate(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
 }
 
 function buildLatestMap(rows) {
@@ -540,7 +529,6 @@ async function loadDashboard() {
     );
     matches.splice(0, matches.length, ...matchRows);
     quizByApplicant = buildLatestMap(quizRows);
-    matchByApplicant = buildLatestMap(matchRows);
     renderSummary(quizRows, matchRows);
     renderApplicants();
     renderEvents();

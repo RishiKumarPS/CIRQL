@@ -4,6 +4,9 @@
   --bone-dim: #c8c6be;
   --vibe: #7b2fff;
   --vibe-light: rgba(123, 47, 255, 0.12);
+  --white: #ffffff;
+  --card-bg: #0f0f0f;
+  --border: rgba(255, 255, 255, 0.08);
   --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
   --font-display: "Fraunces", serif;
   --radius-control: 5px;
@@ -23,7 +26,7 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   background: #17131f;
-  color: #f3f2ed;
+  color: var(--bone);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
   font: 500 13px/1.45 "DM Sans", system-ui, -apple-system, sans-serif;
   opacity: 0;
@@ -39,16 +42,6 @@
 }
 
 /* index.html styles */
-html.page-index {
-  --midnight: #060606;
-  --bone: #f3f2ed;
-  --bone-dim: #c8c6be;
-  --vibe: #7b2fff;
-  --vibe-light: rgba(123, 47, 255, 0.12);
-  --white: #ffffff;
-  --card-bg: #0f0f0f;
-  --border: rgba(255, 255, 255, 0.08);
-}
 html.page-index,
 html.page-index *,
 html.page-index *::before,
@@ -70,7 +63,7 @@ html.page-index body {
 }
 html.page-index ::selection {
   background: var(--vibe);
-  color: #fff;
+  color: var(--white);
 }
 html.page-index [hidden] {
   display: none !important;
@@ -272,13 +265,13 @@ html.page-index .btn-primary {
   font-family: "DM Sans", system-ui, -apple-system, sans-serif;
 }
 html.page-index .btn-primary:hover {
-  background: #fff;
+  background: var(--white);
   transform: scale(1.02);
 }
 html.page-index .btn-vibe {
   font-size: 14px;
   font-weight: 700;
-  color: #fff;
+  color: var(--white);
   background: var(--vibe);
   border: none;
   cursor: pointer;
@@ -593,7 +586,7 @@ html.page-index .events-grid.is-loading .event-tag {
   }
 }
 html.page-index .event-card {
-  background: #fff;
+  background: var(--white);
   border-radius: 24px;
   padding: 36px;
   border: 1px solid rgba(0, 0, 0, 0.07);
@@ -764,7 +757,7 @@ html.page-index .btn-apply {
   white-space: nowrap;
 }
 html.page-index .btn-apply:hover {
-  background: #fff;
+  background: var(--white);
 }
 html.page-index .btn-apply:disabled,
 html.page-index .btn-apply-outline:disabled {
@@ -1236,7 +1229,7 @@ html.page-index .pricing-grid {
   gap: 12px;
 }
 html.page-index .price-card {
-  background: #fff;
+  background: var(--white);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 24px;
   padding: 36px;
@@ -1363,7 +1356,7 @@ html.page-index .btn-buy-solid {
 html.page-index .btn-buy-vibe {
   background: var(--vibe);
   border: none;
-  color: #fff;
+  color: var(--white);
 }
 html.page-index footer {
   background: var(--bone);
@@ -1758,7 +1751,7 @@ html.page-index .u-inline-270ab5e0e1 {
   padding: 20px;
 }
 html.page-index .u-inline-1fd218cedd {
-  background: #0f0f0f;
+  background: var(--card-bg);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 32px;
   padding: 48px;
@@ -2231,16 +2224,8 @@ html.page-index .spots-fill[data-progress="100"] {
 
 /* cirql-mcq.html styles */
 html.page-quiz {
-  --midnight: #060606;
-  --bone: #f3f2ed;
-  --bone-dim: #c8c6be;
-  --vibe: #7b2fff;
-  --vibe-light: rgba(123, 47, 255, 0.12);
   --vibe-glow: rgba(123, 47, 255, 0.25);
-  --white: #ffffff;
-  --card-bg: #0f0f0f;
   --card-hover: #141414;
-  --border: rgba(255, 255, 255, 0.08);
   --border-selected: rgba(123, 47, 255, 0.6);
 }
 html.page-quiz,
@@ -2474,7 +2459,7 @@ html.page-quiz .option-dot-inner {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--white);
   opacity: 0;
   transform: scale(0);
   transition:
@@ -2516,7 +2501,7 @@ html.page-quiz .btn-submit {
   font-family: "DM Sans", system-ui, -apple-system, sans-serif;
   font-size: 15px;
   font-weight: 700;
-  color: #fff;
+  color: var(--white);
   background: var(--vibe);
   border: none;
   cursor: pointer;
@@ -2736,14 +2721,6 @@ html.page-quiz #progressBar[data-progress="10"] {
 
 /* admin.html styles */
 html.page-admin {
-  --midnight: #060606;
-  --bone: #f3f2ed;
-  --bone-dim: #c8c6be;
-  --vibe: #7b2fff;
-  --vibe-light: rgba(123, 47, 255, 0.12);
-  --white: #ffffff;
-  --card-bg: #0f0f0f;
-  --border: rgba(255, 255, 255, 0.08);
   --muted: rgba(243, 242, 237, 0.48);
   --green: #67d6a0;
   --red: #ff7777;
@@ -3605,5 +3582,5 @@ html.page-404 .not-found-link {
   transition: background 0.2s ease;
 }
 html.page-404 .not-found-link:hover {
-  background: #fff;
+  background: var(--white);
 }

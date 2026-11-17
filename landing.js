@@ -187,10 +187,6 @@ async function loadMatchReveal() {
   }
 }
 
-function formatEventDate(value) {
-  return formatISTDateTime(value) || "Date TBA";
-}
-
 function renderFooterEventCTA() {
   const button = document.getElementById("footer-event-cta");
   if (!featuredEventRecord) {
@@ -245,7 +241,7 @@ function renderEventCard(card, eventItem, isFeatured) {
   }
 
   if (metaRows[0]) {
-    const dateText = formatEventDate(eventDate);
+    const dateText = formatISTDateTime(eventDate) || "Date TBA";
     setTextNode(metaRows[0], dateText);
   }
 

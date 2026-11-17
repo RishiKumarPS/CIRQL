@@ -154,22 +154,6 @@ document
     }
   });
 
-function restart() {
-  document.getElementById("resultOverlay").classList.remove("show");
-  document
-    .querySelectorAll(".option-card")
-    .forEach((c) => c.classList.remove("selected"));
-  Object.keys(answers).forEach((k) => delete answers[k]);
-  try {
-    localStorage.removeItem(draftKey);
-  } catch (error) {
-    console.warn("Quiz draft could not be cleared.", error);
-  }
-  hasSubmitted = false;
-  updateProgress();
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
 document.getElementById("restartQuiz").addEventListener("click", () => {
   window.location.href = "index.html";
 });
