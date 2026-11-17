@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      property="og:title"
+      content="CIRQL — Curated Connections. Real Life."
+    />
+    <meta
+      property="og:description"
+      content="A curated offline experience for Bangalore's 21–26 crowd. Meet hand-picked people at intentional socials."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://cirql.in/" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
       {
@@ -27,6 +37,13 @@
   </head>
 
   <body class="page-index">
+    <div
+      id="app-toast"
+      class="app-toast"
+      role="status"
+      aria-live="polite"
+      hidden
+    ></div>
     <!-- NAV -->
     <nav>
       <a href="#" class="nav-logo">CIRQL</a>
@@ -266,6 +283,7 @@
               <img
                 src="https://picsum.photos/seed/cirql1/480/560"
                 alt="Match pair"
+                loading="lazy"
               />
               <div class="match-card-info">
                 <span class="match-names">Priya + Arjun</span>
@@ -276,6 +294,7 @@
               <img
                 src="https://picsum.photos/seed/cirql2/480/560"
                 alt="Match pair"
+                loading="lazy"
               />
               <div class="match-card-info">
                 <span class="match-names">Sia + Mihir</span>
@@ -286,6 +305,7 @@
               <img
                 src="https://picsum.photos/seed/cirql3/480/560"
                 alt="Match pair"
+                loading="lazy"
               />
               <div class="match-card-info">
                 <span class="match-names">Zara + Dev</span>
@@ -296,6 +316,7 @@
               <img
                 src="https://picsum.photos/seed/cirql4/480/560"
                 alt="Match pair"
+                loading="lazy"
               />
               <div class="match-card-info">
                 <span class="match-names">Ananya + Kabir</span>
@@ -306,6 +327,7 @@
               <img
                 src="https://picsum.photos/seed/cirql5/480/560"
                 alt="Match pair"
+                loading="lazy"
               />
               <div class="match-card-info">
                 <span class="match-names">Riya + Aman</span>
@@ -316,6 +338,7 @@
               <img
                 src="https://picsum.photos/seed/cirql6/480/560"
                 alt="Match pair"
+                loading="lazy"
               />
               <div class="match-card-info">
                 <span class="match-names">Tara + Rohan</span>
@@ -327,6 +350,7 @@
               <img
                 src="https://picsum.photos/seed/cirql1/480/560"
                 alt="Match pair"
+                loading="lazy"
               />
               <div class="match-card-info">
                 <span class="match-names">Priya + Arjun</span>
@@ -337,6 +361,7 @@
               <img
                 src="https://picsum.photos/seed/cirql2/480/560"
                 alt="Match pair"
+                loading="lazy"
               />
               <div class="match-card-info">
                 <span class="match-names">Sia + Mihir</span>
@@ -347,6 +372,7 @@
               <img
                 src="https://picsum.photos/seed/cirql3/480/560"
                 alt="Match pair"
+                loading="lazy"
               />
               <div class="match-card-info">
                 <span class="match-names">Zara + Dev</span>
@@ -357,6 +383,7 @@
               <img
                 src="https://picsum.photos/seed/cirql4/480/560"
                 alt="Match pair"
+                loading="lazy"
               />
               <div class="match-card-info">
                 <span class="match-names">Ananya + Kabir</span>
@@ -367,6 +394,7 @@
               <img
                 src="https://picsum.photos/seed/cirql5/480/560"
                 alt="Match pair"
+                loading="lazy"
               />
               <div class="match-card-info">
                 <span class="match-names">Riya + Aman</span>
@@ -377,6 +405,7 @@
               <img
                 src="https://picsum.photos/seed/cirql6/480/560"
                 alt="Match pair"
+                loading="lazy"
               />
               <div class="match-card-info">
                 <span class="match-names">Tara + Rohan</span>
@@ -405,7 +434,7 @@
           </button>
         </div>
 
-        <div class="events-grid">
+        <div class="events-grid" aria-busy="true">
           <!-- Featured event -->
           <div class="event-card featured">
             <div class="event-body">
@@ -1388,6 +1417,63 @@
       let featuredEventRecord = null;
       let pendingApplicant = null;
       let pendingAuthMode = "signup";
+      let matchChannel = null;
+      let toastTimer = null;
+      let toastHideTimer = null;
+      let matchCountdownInterval = null;
+
+      function showToast(message) {
+        const toast = document.getElementById("app-toast");
+        if (!toast) return;
+        window.clearTimeout(toastTimer);
+        window.clearTimeout(toastHideTimer);
+        toast.textContent = message;
+        toast.hidden = false;
+        requestAnimationFrame(() => toast.classList.add("is-visible"));
+        toastTimer = window.setTimeout(() => {
+          toast.classList.remove("is-visible");
+          toastHideTimer = window.setTimeout(() => {
+            toast.hidden = true;
+          }, 220);
+        }, 4200);
+      }
+
+      function matchCacheKey(applicantId) {
+        return `cirql_match_${applicantId}`;
+      }
+
+      function cacheMatchReveal(applicantId, match) {
+        const existing = readCachedMatchReveal(applicantId);
+        const incomingTime = Date.parse(match.created_at || "");
+        const existingTime = Date.parse(existing?.created_at || "");
+        if (
+          Number.isFinite(incomingTime) &&
+          Number.isFinite(existingTime) &&
+          incomingTime < existingTime
+        ) {
+          return false;
+        }
+
+        try {
+          sessionStorage.setItem(
+            matchCacheKey(applicantId),
+            JSON.stringify(match),
+          );
+        } catch (error) {
+          console.warn("Match reveal could not be cached.", error);
+        }
+        return true;
+      }
+
+      function readCachedMatchReveal(applicantId) {
+        try {
+          const cached = sessionStorage.getItem(matchCacheKey(applicantId));
+          return cached ? JSON.parse(cached) : null;
+        } catch (error) {
+          console.warn("Cached match reveal could not be read.", error);
+          return null;
+        }
+      }
 
       function setTextNode(node, value) {
         if (!node) return;
@@ -1406,6 +1492,7 @@
         const subtitle = document.getElementById("match-reveal-sub");
         const status = document.getElementById("match-reveal-status");
         const time = document.getElementById("match-reveal-time");
+        window.clearInterval(matchCountdownInterval);
         const revealAt = new Date(match.reveal_at);
 
         if (Number.isNaN(revealAt.getTime())) return;
@@ -1417,7 +1504,7 @@
           );
 
           if (remainingMinutes === 0) {
-            window.clearInterval(countdownInterval);
+            window.clearInterval(matchCountdownInterval);
             if (label) label.textContent = "Your match is here";
             if (score) score.textContent = `${match.compatibility_score}%`;
             if (name) name.textContent = match.matched_name || "Your match";
@@ -1439,7 +1526,6 @@
           if (time) time.textContent = `In ${countdown}`;
         };
 
-        let countdownInterval;
         if (revealAt.getTime() <= Date.now()) {
           if (label) label.textContent = "Your match is here";
           if (score) score.textContent = `${match.compatibility_score}%`;
@@ -1451,35 +1537,68 @@
         }
 
         renderCountdown();
-        countdownInterval = window.setInterval(renderCountdown, 1000);
+        matchCountdownInterval = window.setInterval(renderCountdown, 1000);
       }
 
       async function loadMatchReveal() {
-        let applicantId;
-        try {
-          applicantId = sessionStorage.getItem("applicant_id");
-        } catch (error) {
-          console.warn(
-            "Applicant session unavailable; showing match teaser.",
-            error,
-          );
+        const applicantId = readMemberValue("applicant_id").trim();
+        if (
+          !applicantId ||
+          readMemberValue("applicant_verified") !== "true"
+        ) {
           return;
         }
 
-        if (!applicantId) return;
+        const cachedMatch = readCachedMatchReveal(applicantId);
+        if (cachedMatch) renderMatchReveal(cachedMatch);
 
         try {
+          if (!matchChannel) {
+            matchChannel = window.supabaseClient
+              .channel(`match-reveal-${applicantId}`)
+              .on(
+                "postgres_changes",
+                {
+                  event: "INSERT",
+                  schema: "public",
+                  table: "matches",
+                  filter: `applicant_id=eq.${applicantId}`,
+                },
+                (payload) => {
+                  const match = payload.new;
+                  if (!match || String(match.applicant_id) !== applicantId) {
+                    return;
+                  }
+                  if (cacheMatchReveal(applicantId, match)) {
+                    renderMatchReveal(match);
+                  }
+                },
+              )
+              .subscribe((status) => {
+                if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+                  showToast("Live match updates are unavailable right now.");
+                }
+              });
+          }
+
           const { data, error } = await window.supabaseClient
             .from("matches")
-            .select("matched_name, compatibility_score, reveal_at")
+            .select(
+              "matched_name, compatibility_score, reveal_at, applicant_id, created_at",
+            )
             .eq("applicant_id", applicantId)
             .order("created_at", { ascending: false })
             .limit(1);
 
           if (error) throw error;
-          if (data && data[0]) renderMatchReveal(data[0]);
+          if (data && data[0]) {
+            if (cacheMatchReveal(applicantId, data[0])) {
+              renderMatchReveal(data[0]);
+            }
+          }
         } catch (error) {
           console.error("Failed to load match reveal:", error);
+          showToast("Your match could not be refreshed. Check your connection.");
         }
       }
 
@@ -1651,6 +1770,14 @@
       }
 
       function clearMemberSession() {
+        const applicantId = readMemberValue("applicant_id");
+        if (applicantId) {
+          try {
+            sessionStorage.removeItem(matchCacheKey(applicantId));
+          } catch (error) {
+            console.warn("Cached match reveal could not be cleared.", error);
+          }
+        }
         [localStorage, sessionStorage].forEach((storage) => {
           [
             "applicant_id",
@@ -1751,6 +1878,7 @@
             button.textContent = "Request Spot →";
           }
           console.error("Event application failed:", error);
+          showToast("Your event request could not be sent. Please try again.");
         }
       }
 
@@ -1805,11 +1933,17 @@
           renderMemberEventCards();
         } catch (error) {
           console.error("Member status could not be loaded:", error);
+          showToast("Member details could not be loaded. Check your connection.");
           renderMemberStatusBar();
         }
       }
 
       async function loadEvents() {
+        const eventsGrid = document.querySelector(".events-grid");
+        if (eventsGrid) {
+          eventsGrid.classList.add("is-loading");
+          eventsGrid.setAttribute("aria-busy", "true");
+        }
         const cards = document.querySelectorAll(".event-card");
         cards.forEach((card) => {
           const titleNode = card.querySelector(".event-title");
@@ -1904,6 +2038,7 @@
           }
         } catch (error) {
           console.error("Failed to load events:", error);
+          showToast("Events could not be loaded. Check your connection.");
           featuredEventRecord = null;
           renderFooterEventCTA();
           const cardsArray = Array.from(
@@ -1930,6 +2065,11 @@
                   : "Coming soon";
             }
           });
+        } finally {
+          if (eventsGrid) {
+            eventsGrid.classList.remove("is-loading");
+            eventsGrid.setAttribute("aria-busy", "false");
+          }
         }
       }
 
@@ -2323,6 +2463,7 @@
             showOtpStep(data, "login");
           } catch (error) {
             loginFeedback.textContent = `Member lookup failed: ${error.message || error}`;
+            showToast("Member lookup failed. Check your connection and retry.");
           } finally {
             submitButton.disabled = false;
             submitButton.textContent = "Continue →";
@@ -2347,19 +2488,29 @@
           const intent = document.getElementById("intent")?.value.trim();
 
           if (!firstName || !lastName || !email || !phone || !age || !intent) {
-            window.alert("Please complete all fields before submitting.");
+            showToast("Please complete all fields before submitting.");
             return;
           }
 
-          const ageValue = parseInt(age, 10);
+          const ageValue = Number(age);
 
-          if (Number.isNaN(ageValue) || ageValue < 18 || ageValue > 99) {
-            window.alert("Please enter a valid age between 18 and 99.");
+          if (
+            !/^\d+$/.test(age) ||
+            !Number.isInteger(ageValue) ||
+            ageValue < 18 ||
+            ageValue > 99
+          ) {
+            showToast("Please enter a whole-number age between 18 and 99.");
             return;
           }
 
           if (!/^[0-9]{10}$/.test(phone)) {
-            window.alert("Please enter a valid 10-digit mobile number.");
+            showToast("Please enter a valid 10-digit mobile number.");
+            return;
+          }
+
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            showToast("Please enter a valid email address.");
             return;
           }
 
@@ -2403,7 +2554,9 @@
             applyBtn.textContent = "Create Member Profile →";
             applyBtn.classList.remove("is-success");
             applyBtn.classList.remove("is-busy");
-            window.alert("Profile creation failed. Please try again.");
+            showToast(
+              "Profile creation failed. Please check your connection and retry.",
+            );
           }
         });
       }
@@ -2441,6 +2594,7 @@
 
               if (error) {
                 console.error("Applicant verification update failed:", error);
+                showToast("Your profile status could not be updated yet.");
               }
             }
 
@@ -2481,7 +2635,8 @@
             console.error("OTP verification failed:", error);
             otpBtn.textContent = "Submit OTP →";
             otpBtn.classList.remove("is-success");
-            window.alert("Verification failed. Please try again.");
+            otpBtn.disabled = false;
+            showToast("Verification failed. Please try again.");
           }
         });
       }

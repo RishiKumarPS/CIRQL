@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta property="og:title" content="CIRQL — Vibe Check" />
+    <meta
+      property="og:description"
+      content="Build your CIRQL vibe profile and find your next curated connection."
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://cirql.in/cirql-mcq.html"
+    />
     <title>CIRQL — Vibe Check</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
@@ -74,6 +84,13 @@
   </head>
 
   <body class="page-quiz">
+    <div
+      id="app-toast"
+      class="app-toast"
+      role="status"
+      aria-live="polite"
+      hidden
+    ></div>
     <div class="page-glow"></div>
 
     <nav>
@@ -649,73 +666,140 @@
       const TOTAL = 10;
       const answers = {};
       const applicantId = resolveApplicantId();
+      const draftKey = `cirql_quiz_draft_${applicantId || "demo"}`;
+      let isSubmitting = false;
+      let hasSubmitted = false;
+      let toastTimer = null;
+      let toastHideTimer = null;
+
+      function showToast(message) {
+        const toast = document.getElementById("app-toast");
+        if (!toast) return;
+        window.clearTimeout(toastTimer);
+        window.clearTimeout(toastHideTimer);
+        toast.textContent = message;
+        toast.hidden = false;
+        requestAnimationFrame(() => toast.classList.add("is-visible"));
+        toastTimer = window.setTimeout(() => {
+          toast.classList.remove("is-visible");
+          toastHideTimer = window.setTimeout(() => {
+            toast.hidden = true;
+          }, 220);
+        }, 4200);
+      }
+
+      function saveQuizDraft() {
+        try {
+          localStorage.setItem(draftKey, JSON.stringify(answers));
+        } catch (error) {
+          console.warn("Quiz answers could not be saved locally.", error);
+          showToast("Your answers could not be saved on this device.");
+        }
+      }
+
+      function restoreQuizDraft() {
+        try {
+          const draft = JSON.parse(localStorage.getItem(draftKey) || "{}");
+          for (let question = 1; question <= TOTAL; question += 1) {
+            const value = draft[String(question)];
+            if (!["a", "b", "c", "d"].includes(value)) continue;
+            answers[String(question)] = value;
+            const option = document.querySelector(
+              `.options[data-q="${question}"] .option-card[data-val="${value}"]`,
+            );
+            option?.classList.add("selected");
+          }
+        } catch (error) {
+          console.warn("Saved quiz answers could not be restored.", error);
+          showToast("Saved answers could not be restored.");
+        }
+      }
 
       function updateProgress() {
         const count = Object.keys(answers).length;
         const pct = Math.round((count / TOTAL) * 100);
         document.getElementById("progressBar").dataset.progress = String(count);
         document.getElementById("pct").textContent = pct + "%";
-        document.getElementById("submitBtn").disabled = count < TOTAL;
+        document.getElementById("submitBtn").disabled =
+          count < TOTAL || isSubmitting || hasSubmitted;
       }
 
       document.querySelectorAll(".options").forEach((group) => {
         group.querySelectorAll(".option-card").forEach((card) => {
           card.addEventListener("click", () => {
+            if (isSubmitting || hasSubmitted) return;
             group
               .querySelectorAll(".option-card")
               .forEach((c) => c.classList.remove("selected"));
             card.classList.add("selected");
             answers[group.dataset.q] = card.dataset.val;
+            saveQuizDraft();
             updateProgress();
           });
         });
       });
 
+      restoreQuizDraft();
+      updateProgress();
+
       document
         .getElementById("submitBtn")
         .addEventListener("click", async () => {
+          if (isSubmitting || hasSubmitted) return;
           const submitBtn = document.getElementById("submitBtn");
           const originalText = submitBtn.textContent;
+          isSubmitting = true;
           submitBtn.disabled = true;
           submitBtn.textContent = "Submitting...";
 
           try {
+            const cleanAnswers = {};
+            for (let question = 1; question <= TOTAL; question += 1) {
+              const answer = String(answers[String(question)] || "")
+                .trim()
+                .toLowerCase();
+              if (!["a", "b", "c", "d"].includes(answer)) {
+                throw new Error("Please answer all questions before submitting.");
+              }
+              cleanAnswers[String(question)] = answer;
+            }
+
             const client =
               window.supabaseClient ||
               (window.supabase && window.supabase.createClient
                 ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
                 : null);
 
-            if (client) {
-              const { error } = await client.from("quiz_responses").insert([
-                {
-                  applicant_id: applicantId || null,
-                  answers: answers,
-                },
-              ]);
+            if (!client) throw new Error("Quiz service is unavailable.");
+            const { error } = await client.from("quiz_responses").insert([
+              {
+                applicant_id: applicantId ? String(applicantId).trim() : null,
+                answers: cleanAnswers,
+              },
+            ]);
+            if (error) throw error;
 
-              if (error) {
-                console.warn(
-                  "Quiz response could not be saved to Supabase; continuing in demo mode.",
-                  error,
-                );
-              }
+            try {
+              localStorage.removeItem(draftKey);
+            } catch (error) {
+              console.warn("Submitted quiz draft could not be removed.", error);
+              showToast(
+                "Submitted successfully, but the saved draft remains on this device.",
+              );
             }
-
             writeApplicantStorage("quiz_completed", "true");
+            hasSubmitted = true;
             document.getElementById("resultOverlay").classList.add("show");
             window.scrollTo({ top: 0 });
           } catch (error) {
-            console.warn(
-              "Quiz submission failed; continuing in demo mode.",
-              error,
+            console.error("Quiz submission failed:", error);
+            showToast(
+              "Your profile could not be submitted. Check your connection and retry.",
             );
-            writeApplicantStorage("quiz_completed", "true");
-            document.getElementById("resultOverlay").classList.add("show");
-            window.scrollTo({ top: 0 });
           } finally {
-            submitBtn.disabled = false;
+            isSubmitting = false;
             submitBtn.textContent = originalText;
+            updateProgress();
           }
         });
 
@@ -725,6 +809,12 @@
           .querySelectorAll(".option-card")
           .forEach((c) => c.classList.remove("selected"));
         Object.keys(answers).forEach((k) => delete answers[k]);
+        try {
+          localStorage.removeItem(draftKey);
+        } catch (error) {
+          console.warn("Quiz draft could not be cleared.", error);
+        }
+        hasSubmitted = false;
         updateProgress();
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
