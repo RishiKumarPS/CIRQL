@@ -14,19 +14,21 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://cirql.in/" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script>
-      {
-        const SUPABASE_URL = "https://wwpvszvnrsemoqjrcqpq.supabase.co";
-        const SUPABASE_ANON_KEY =
-          "sb_publishable_suEQwEixEa1mOPjmDnck1Q_o4WGKVCz";
-        const supabase = window.supabase.createClient(
-          SUPABASE_URL,
-          SUPABASE_ANON_KEY,
-        );
-        window.supabaseClient = supabase;
-      }
+    <script type="module">
+      import {
+        supabase,
+        normalizePhoneNumber,
+        formatISTDateTime,
+      } from "./supabase-client.js";
+      window.supabaseClient = supabase;
+      window.normalizePhoneNumber = normalizePhoneNumber;
+      window.formatISTDateTime = formatISTDateTime;
     </script>
     <title>CIRQL — Curated Connections. Real Life.</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23060606'/%3E%3Cpath d='M43 20a18 18 0 1 0 0 24' fill='none' stroke='%237b2fff' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='42' cy='20' r='3' fill='%23f3f2ed'/%3E%3C/svg%3E"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap"
@@ -1438,6 +1440,15 @@
         }, 4200);
       }
 
+      function hideToast() {
+        const toast = document.getElementById("app-toast");
+        if (!toast) return;
+        window.clearTimeout(toastTimer);
+        window.clearTimeout(toastHideTimer);
+        toast.classList.remove("is-visible");
+        toast.hidden = true;
+      }
+
       function matchCacheKey(applicantId) {
         return `cirql_match_${applicantId}`;
       }
@@ -1603,25 +1614,7 @@
       }
 
       function formatEventDate(value) {
-        if (!value) return "Date TBA";
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return "Date TBA";
-        return new Intl.DateTimeFormat("en-IN", {
-          weekday: "short",
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        }).format(date);
-      }
-
-      function formatEventTime(value) {
-        if (!value) return "Time TBA";
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return "Time TBA";
-        return new Intl.DateTimeFormat("en-IN", {
-          hour: "numeric",
-          minute: "2-digit",
-        }).format(date);
+        return window.formatISTDateTime(value) || "Date TBA";
       }
 
       function renderFooterEventCTA() {
@@ -1652,7 +1645,16 @@
         const title = eventItem.title || "Untitled event";
         const subtitle = eventItem.subtitle || "";
         const location = eventItem.location || "Location TBA";
-        const spotsLeft = Number(eventItem.spots_left ?? 0);
+        const availableSpots = Math.max(
+          0,
+          Number(eventItem.spots_left) || 0,
+        );
+        const spotsText =
+          availableSpots === 0
+            ? "Spots Full"
+            : availableSpots <= 5
+              ? `Only ${availableSpots} ${availableSpots === 1 ? "spot" : "spots"} left`
+              : `${availableSpots} spots left`;
         const eventDate = eventItem.event_date || null;
 
         if (titleNode) {
@@ -1669,7 +1671,7 @@
         }
 
         if (metaRows[0]) {
-          const dateText = `${formatEventDate(eventDate)} · ${formatEventTime(eventDate)}`;
+          const dateText = formatEventDate(eventDate);
           setTextNode(metaRows[0], dateText);
         }
 
@@ -1679,27 +1681,35 @@
 
         if (metaRows[2]) {
           const capacityText = isFeatured
-            ? `Ages 21–26 · ${Math.max(spotsLeft, 0)} spots left · Curated 50/50 split`
-            : `Ages 21–26 · ${Math.max(spotsLeft, 0)} spots left · ${eventItem.featured ? "Featured" : "Community"}`;
+            ? `Ages 21–26 · ${spotsText} · Curated 50/50 split`
+            : `Ages 21–26 · ${spotsText} · ${eventItem.featured ? "Featured" : "Community"}`;
           setTextNode(metaRows[2], capacityText);
         }
 
         if (spotsLabel) {
-          spotsLabel.textContent = `${Math.max(spotsLeft, 0)} spots left`;
+          spotsLabel.textContent = spotsText;
+          spotsLabel.classList.toggle(
+            "is-urgent",
+            availableSpots > 0 && availableSpots <= 5,
+          );
+          spotsLabel.classList.toggle("is-full", availableSpots === 0);
         }
 
         if (fill) {
           const fillPercent = Math.max(
             0,
-            Math.min(100, (spotsLeft / 60) * 100),
+            Math.min(100, (availableSpots / 60) * 100),
           );
           fill.dataset.progress = String(Math.round(fillPercent));
-          fill.classList.remove("is-empty");
+          fill.classList.toggle("is-empty", availableSpots === 0);
         }
 
         if (applyButton) {
           applyButton.type = "button";
           applyButton.dataset.eventId = String(eventItem.id ?? "");
+          applyButton.disabled = availableSpots <= 0;
+          applyButton.textContent =
+            availableSpots <= 0 ? "Spots Full" : "Request Spot →";
         }
 
         renderMemberEventState(card, eventItem);
@@ -1735,7 +1745,13 @@
 
         if (existingBadge) existingBadge.remove();
         applyButton.hidden = false;
-        applyButton.textContent = "Request Spot →";
+        const spotsLeft = Math.max(
+          0,
+          Number(eventItem.spots_left) || 0,
+        );
+        applyButton.disabled = spotsLeft <= 0;
+        applyButton.textContent =
+          spotsLeft <= 0 ? "Spots Full" : "Request Spot →";
       }
 
       function readMemberValue(key) {
@@ -1756,7 +1772,7 @@
       function writeMemberSession(applicant, verified) {
         const values = {
           applicant_id: String(applicant.id),
-          applicant_phone: String(applicant.phone || "").replace(/\D/g, ""),
+          applicant_phone: window.normalizePhoneNumber(applicant.phone),
           applicant_verified: String(Boolean(verified)),
         };
         try {
@@ -2083,7 +2099,6 @@
     <!-- APPLICATION MODAL -->
     <div
       id="apply-modal"
-      onclick="if (event.target === this) closeApplyModal();"
       class="apply-modal u-inline-270ab5e0e1"
     >
       <div class="u-inline-1fd218cedd">
@@ -2184,11 +2199,11 @@
               <input
                 id="phone"
                 type="tel"
-                inputmode="numeric"
+                inputmode="tel"
                 autocomplete="tel-national"
                 placeholder="0000000000"
-                pattern="[0-9]{10}"
-                maxlength="10"
+                pattern="[+0-9 -]{10,16}"
+                maxlength="16"
                 title="Enter a 10-digit mobile number."
                 class="u-inline-23eceb13dc"
               />
@@ -2215,11 +2230,11 @@
             <input
               id="member-login-identifier"
               type="tel"
-              inputmode="numeric"
+              inputmode="tel"
               autocomplete="tel-national"
               placeholder="10-digit mobile number"
-              pattern="[0-9]{10}"
-              maxlength="10"
+              pattern="[+0-9 -]{10,16}"
+              maxlength="16"
               title="Enter a 10-digit mobile number."
               class="u-inline-23eceb13dc"
             />
@@ -2245,6 +2260,8 @@
             <input
               type="text"
               id="otp-input"
+              inputmode="numeric"
+              autocomplete="one-time-code"
               placeholder="000000"
               maxlength="6"
               class="u-inline-23eceb13dc"
@@ -2324,6 +2341,29 @@
           title.textContent = "Verify Phone";
           subtitle.textContent = "Enter the 6-digit demo OTP code to continue.";
         }
+
+        if (
+          document.getElementById("apply-modal").classList.contains("is-open")
+        ) {
+          focusAuthInput(mode);
+        }
+      }
+
+      function focusAuthInput(mode) {
+        const input = document.getElementById(
+          mode === "otp"
+            ? "otp-input"
+            : mode === "login"
+              ? "member-login-identifier"
+              : "first-name",
+        );
+        window.requestAnimationFrame(() => {
+          if (
+            document.getElementById("apply-modal").classList.contains("is-open")
+          ) {
+            input?.focus();
+          }
+        });
       }
 
       function showOtpStep(applicant, mode) {
@@ -2332,6 +2372,17 @@
         writeMemberSession(applicant, false);
         setAuthMode("otp");
         document.getElementById("otp-input").value = "";
+      }
+
+      function clearModalValidation() {
+        const feedback = document.getElementById("member-login-feedback");
+        if (feedback) feedback.textContent = "";
+        document
+          .querySelectorAll("#apply-modal [aria-invalid='true']")
+          .forEach((input) => {
+            input.removeAttribute("aria-invalid");
+            input.setCustomValidity("");
+          });
       }
 
       function resetModal() {
@@ -2344,7 +2395,7 @@
 
         setAuthMode("signup");
         pendingApplicant = null;
-        document.getElementById("member-login-feedback").textContent = "";
+        clearModalValidation();
 
         if (applyBtn) {
           applyBtn.textContent = "Create Member Profile →";
@@ -2363,13 +2414,28 @@
       function closeApplyModal() {
         document.getElementById("apply-modal").classList.remove("is-open");
         resetModal();
+        hideToast();
       }
 
       function openApplyModal(mode = "signup") {
         resetModal();
         setAuthMode(mode);
         document.getElementById("apply-modal").classList.add("is-open");
+        focusAuthInput(mode);
       }
+
+      const applyModal = document.getElementById("apply-modal");
+      applyModal.addEventListener("click", (event) => {
+        if (event.target === applyModal) closeApplyModal();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (
+          event.key === "Escape" &&
+          applyModal.classList.contains("is-open")
+        ) {
+          closeApplyModal();
+        }
+      });
 
       document
         .querySelector(".events-grid")
@@ -2427,7 +2493,7 @@
         .addEventListener("submit", async (event) => {
           event.preventDefault();
           const input = document.getElementById("member-login-identifier");
-          const phone = input.value.trim();
+          const phone = window.normalizePhoneNumber(input.value);
           const loginFeedback = document.getElementById(
             "member-login-feedback",
           );
@@ -2483,7 +2549,9 @@
           const firstName = document.getElementById("first-name")?.value.trim();
           const lastName = document.getElementById("last-name")?.value.trim();
           const email = document.getElementById("email")?.value.trim();
-          const phone = document.getElementById("phone")?.value.trim();
+          const phone = window.normalizePhoneNumber(
+            document.getElementById("phone")?.value,
+          );
           const age = document.getElementById("age")?.value.trim();
           const intent = document.getElementById("intent")?.value.trim();
 
